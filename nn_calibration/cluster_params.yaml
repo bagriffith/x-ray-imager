@@ -1,0 +1,44 @@
+Am241:
+  energy:
+    - 15.5
+    - 59.6
+  for_fit:
+    - 1
+  dbscan:
+    eps: .375
+    frac_min_samples: 16
+Cd109:
+  energy:
+    - 22.5
+    - 88.
+  for_fit:
+    - 0
+    - 1
+  channel_limits:
+    - 5
+    - 250
+  dbscan:
+    eps: .375
+    frac_min_samples: 32
+Co57:
+  energy:
+    - 123.6
+  for_fit:
+    - 0
+  channel_limits:
+    - 175
+    - 350
+  dbscan:
+    eps: .375 # 12
+    frac_min_samples: 16 # 32
+Na22:
+  energy:
+    - 511.
+  for_fit:
+    - 0
+  channel_limits:
+    - 650
+    - 1000
+  dbscan:
+    eps: .375 # 48
+    frac_min_samples: 16
