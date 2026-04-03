@@ -26,6 +26,8 @@
 4. Calculates mean response and other statistics
 """
 import logging
+from typing import Optional
+from itertools import combinations
 import numpy as np
 
 
@@ -77,28 +79,64 @@ def find_centers(points: np.typing.NDArray[np.long],
     return centers, spreads, n_points
 
 
-def match_cluster_energy(points, cluster_id):
+def match_energy(mean_response: np.typing.NDArray[np.float64],
+                 energies: np.typing.NDArray[np.float64],
+                 gain_range: Optional[tuple[float, float]] = None
+                 ) -> tuple[np.typing.NDArray[np.long], float]:
+    """Matches a list of spectral lines with the mean detector response.
 
-    centers, spreads, n_points = find_centers(points, cluster_id)
+    This takes in a list of mean detector responses. The sum of all
+    detector values gives a total that should be proportional to the
+    total light in the event, and the x-ray energy absorbed. Not all
+    mean responses given may have an associated line. The ones that
+    do should all have the same energy scaling.
 
-    cluster_amplitudes = np.sum(centers, axis=1)
+    Args:
+      mean_response:
+        An array of detector values associated with the mean of some feature
+        in a calibration set. len(energies) of these are from the gamma
+        spectral lines listed there, and rest are other features.
+      energies:
+        An array listing some of the spectral lines captured. There should be
+        fewer than the number of mean responses. Specific units are not
+        required, but will change the meaning of the gain returned.
+      gain_range:
+        Tuple setting the minimum and maximum gain that will be accepted as
+        for the returned association.
 
-    logger.debug('Contains %s events', np.sum(n_points))
+    Returns:
+        A tuple (matched_index, gain). matched_index is a Array of indexes
+        that selects the mean_response that best matches energy in that same
+        array position. gain is the associated dector response / energy, in
+        the units used for those arguments, associated with best mapping.
+    """
+    amplitudes = np.sum(mean_response, axis=1)
+    energies_sorted = np.sort(energies)  # Sort in case they aren't already
+
+    if gain_range is None:
+        # If not provided, use the largest conceivable range.
+        gain_range = (min(amplitudes) / max(energies),
+                      max(amplitudes) / min(energies))
 
     # Find the best mapping of clusters to energy lines
-    # TODO Identify best energy match
-    # TODO Add logging for fit quality
     min_error = np.inf
-    best_mapping = None
-    best_gain = None
-    sorted_cluster_index = np.argsort(cluster_amplitudes)
-    for trial_index in combinations(sorted_cluster_index):
-        trial_amplitudes = cluster_amplitudes[trial_index]
-        for gain_trial in np.arange(min_gain, max_gain, 0.1):
-            error = np.linalg.norm(trial_amplitudes - gain_trial*line_energies)
+    best_mapping = np.full((len(energies)), -1, dtype=int)
+    best_gain = np.nan
+
+    for trial_index in combinations(np.argsort(amplitudes), len(energies)):
+        trial_index = np.array(trial_index, dtype=int)
+        trial_amplitudes = amplitudes[trial_index]
+        for gain_trial in np.arange(*gain_range, 0.1):
+            diff = trial_amplitudes - gain_trial*energies_sorted
+            error = np.linalg.norm(diff)
             if error < min_error:
+                logging.debug('Better index found: %s (error %s < %s)',
+                              trial_index, error, min_error)
                 min_error = error
                 best_mapping = trial_index
                 best_gain = gain_trial
 
-    return centers[best_mapping], spreads[best_mapping], best_gain
+    if np.isinf(min_error):
+        raise RuntimeError('Best match energy not found.')
+
+    return best_mapping, best_gain

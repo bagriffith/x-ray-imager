@@ -18,10 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Charachterize a x-ray imager from calibration data.
+"""Characterize a x-ray imager from calibration data.
 """
 from x_ray_imager_bagriff.identify_lines._identify import \
-    find_centers, match_cluster_energy
+    find_centers, match_energy
 
 __all__ = ['find_centers',
-           'match_cluster_energy']
+           'match_energy']
