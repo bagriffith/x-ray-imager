@@ -1,0 +1,19 @@
+[project]
+name = "x_ray_imager_bagriff"
+version = "0.0.1"
+authors = [
+  { name="Brady Griffith", email="bagriff@uw.edu" },
+]
+description = "Tools to estimate postion for an x-ray imager."
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICENSE"]
+
+[project.urls]
+Homepage = "https://github.com/bagriffith/x-ray-imager"
+Issues = "https://github.com/bagriffith/x-ray-imager/issues"
