@@ -20,31 +20,30 @@
 import pytest
 import numpy as np
 from x_ray_imager_bagriff.identify_lines\
-    import find_centers, match_energy
+    import SourceParams
 
 
-def test_find_centers():
-    """Tests `find_centers()` for a Poisson distribution."""
-    n_points = 10_000
-    mean = 256
-    std = 16    # Sqrt(256)
-    np.random.seed(0)  # Keep the set consistent between tests
-    example_set = np.random.poisson(mean, size=(n_points, 4))
-    example_labels = np.zeros(n_points, dtype=int)
+def test_get_source():
+    """Create and retreive a source."""
+    example_energies = np.linspace(100, 400, 4) - 0.001
+    source = SourceParams(example_energies, 'Ex123')
+    source_fetched = SourceParams.get_source('Ex123')
 
-    c, s, n = find_centers(example_set, example_labels)
-
-    assert c == pytest.approx(np.full((1, 4), mean), 0.05)
-    assert s == pytest.approx(np.full((1, 4), std), 0.05)
-    assert n == np.array([n_points])
+    assert source == source_fetched
+    assert source_fetched.energies == pytest.approx(example_energies)
 
 
-def test_match_energy():
-    """Tests `match_energy()` for evenly spaced centers."""
-    example_centers = np.transpose([np.arange(100., 1000., 100.)]*4)
-    example_energies = np.array([30., 80.])
+def test_filter():
+    """Test SourceParams excludes energies correctly.
 
-    idx, g = match_energy(example_centers, example_energies, (20, 80))
+    Energies less than half the min and twice the max should be excluded.
+    """
+    # Slightly above the integer steps to avoid points at the filter boundary.
+    example_energies = np.linspace(100, 400, 4) - 0.001
+    example_points = np.transpose([np.arange(10, 1000, 10)]*4)
+    # For gain = 4.0, points in the range should be:
+    filtered_correct = np.transpose([np.arange(50., 800., 10.)]*4)
 
-    assert np.all(idx == [2, 7])
-    assert g == pytest.approx(40.)
+    source = SourceParams(example_energies)
+    source_filter = source.get_filter(example_points, gain=4.0)
+    assert example_points[source_filter] == pytest.approx(filtered_correct)

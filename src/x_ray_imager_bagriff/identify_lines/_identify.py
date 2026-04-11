@@ -18,17 +18,43 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Produce the mean response from each gamma line in a list of events
+"""Produce the mean response from each gamma line in a list of events.
 
 1. Applies Filters
 2. Clusters Events
-3. Attributes clusters to spectral lines
-4. Calculates mean response and other statistics
+3. Done - Attributes clusters to spectral lines
+4. Done - Calculates mean response and other statistics
 """
 import logging
 from typing import Optional
 from itertools import combinations
 import numpy as np
+from sklearn.base import ClusterMixin
+from x_ray_imager_bagriff.identify_lines._sources import SourceParams
+
+
+def source_identify_all(points: np.typing.NDArray[np.long],
+                        cluster_method: ClusterMixin,
+                        source: SourceParams,
+                        gain_range: Optional[tuple[float, float]] = None
+                        ) -> np.typing.NDArray[np.float64]:
+    """Finds the mean value associated with every source gamma line.
+
+    Args:
+        points:
+            Array of detector values for a set of events.
+            Values are expected to be integers (discretized into channels).
+            Shape should be (number of events, number of detectors).
+        cluster_method:
+        source:
+        gain_range:
+
+    Returns:
+        Array of mean detector responses. Shape is
+        (Number of detectors, Number of lines)
+    """
+    # TODO: Implement
+    return np.array([], dtype=np.float64)
 
 
 def find_centers(points: np.typing.NDArray[np.long],
@@ -39,19 +65,22 @@ def find_centers(points: np.typing.NDArray[np.long],
     """Find mean, spread, and count of each point group.
 
     Args:
-      points:
-        Array of detector values for a set of events.
-        Values are expected to be integers (discretized into channels).
-        Shape should be (Number of Events, Number of Detectors).
-      labels:
-        Integer indexed group identity of each event. It is assumed that all
-        labels from 0 to max(labels) are options, even if not used. Negative
-        labels may be included, but will be ignored.
+        points:
+            Array of detector values for a set of events.
+            See `source_identify_all()` for more.
+        labels:
+            Integer indexed group identity of each event. It is assumed
+            that all labels from 0 to max(labels) are options, even if not
+            used. Negative labels may be included, but will be ignored.
 
     Returns:
-      A tuple (centers, spreads, n_points), where centers is an am Array of
-      the mean value for each detector in each labeled group, spreads is the
-      same but for standard deviation, and n_points is the count in each group.
+        A tuple (centers, spreads, n_points), where centers is an am Array
+        of the mean value for each detector in each labeled group, spreads
+        is the same but for standard deviation, and n_points is the count
+        in each group.
+
+    Raises:
+        ValueError: Error if len(labels) isn't the number of events in points.
     """
     unique_label_ids = set(labels)
     n_groups = max(max(unique_label_ids) + 1, 0)  # Number of groups
@@ -92,17 +121,19 @@ def match_energy(mean_response: np.typing.NDArray[np.float64],
     do should all have the same energy scaling.
 
     Args:
-      mean_response:
-        An array of detector values associated with the mean of some feature
-        in a calibration set. len(energies) of these are from the gamma
-        spectral lines listed there, and rest are other features.
-      energies:
-        An array listing some of the spectral lines captured. There should be
-        fewer than the number of mean responses. Specific units are not
-        required, but will change the meaning of the gain returned.
-      gain_range:
-        Tuple setting the minimum and maximum gain that will be accepted as
-        for the returned association.
+        mean_response:
+            An array of detector values associated with the mean of some
+            feature in a calibration set. len(energies) of these are from
+            the gamma spectral lines listed there, and rest are other
+            features.
+        energies:
+            An array listing some of the spectral lines captured. There
+            should be fewer than the number of mean responses. Specific
+            units are not required, but will change the meaning of the gain
+            returned.
+        gain_range:
+            Tuple setting the minimum and maximum gain that will be
+            accepted as for the returned association.
 
     Returns:
         A tuple (matched_index, gain). matched_index is a Array of indexes
