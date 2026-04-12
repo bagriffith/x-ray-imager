@@ -114,5 +114,9 @@ class SourceParams:
             logging.warning("No source named %s.", name)
             return cls([])
 
+
 # Add sources to the library
-# TODO Add sources
+SourceParams([15.5, 59.6], 'Am241')
+SourceParams([22.5, 88.0], 'Cd109')
+SourceParams([123.6], 'Co57')
+SourceParams([511.0], 'Na22')
