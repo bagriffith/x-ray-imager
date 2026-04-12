@@ -17,26 +17,60 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
 import pytest
 import numpy as np
-from x_ray_imager_bagriff.identify_lines\
-    import find_centers, match_energy
+from sklearn.base import ClusterMixin
+from x_ray_imager_bagriff.identify_lines import (
+    find_centers, match_energy, source_identify_all,
+    SourceParams
+)
+
+
+class MockCluster(ClusterMixin):
+    """Mock scikit-learn clustering where labels are prespecified."""
+    def __init__(self, cluster_labels) -> None:
+        self.labels_ = cluster_labels
+        super().__init__()
+
+    def fit(self, x, **kwargs):
+        """Fit, but do nothing."""
+        _ = x
+        _ = kwargs
+
+
+def test_source_identify_all():
+    """Test source line identification with preidentified clusters."""
+    n_points = 10_000
+    means = (256, 512)
+    np.random.seed(0)  # Keep the set consistent between tests
+    example_set = np.concat(
+        [np.random.poisson(x, size=(n_points, 4)) for x in means]
+    )
+
+    cluster_labels = np.array([0]*n_points + [1]*n_points, dtype=np.long)
+    mock_cluster = MockCluster(cluster_labels)
+
+    source = SourceParams(means)
+
+    centers = source_identify_all(example_set, mock_cluster,
+                                  source, gain_range=(1, 8))
+
+    for mean, center in zip(means, centers):
+        assert center == pytest.approx([mean]*4, 0.05)
 
 
 def test_find_centers():
     """Tests `find_centers()` for a Poisson distribution."""
     n_points = 10_000
     mean = 256
-    std = 16    # Sqrt(256)
     np.random.seed(0)  # Keep the set consistent between tests
     example_set = np.random.poisson(mean, size=(n_points, 4))
     example_labels = np.zeros(n_points, dtype=int)
 
-    c, s, n = find_centers(example_set, example_labels)
+    centers = find_centers(example_set, example_labels)
 
-    assert c == pytest.approx(np.full((1, 4), mean), 0.05)
-    assert s == pytest.approx(np.full((1, 4), std), 0.05)
-    assert n == np.array([n_points])
+    assert centers == pytest.approx(np.full((1, 4), mean), 0.05)
 
 
 def test_match_energy():

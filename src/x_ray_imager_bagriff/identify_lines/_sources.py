@@ -30,12 +30,39 @@ import logging
 import numpy as np
 
 
+def check_gain_range(gain: Optional[float] = None,
+                     gain_range: Optional[tuple[float, float]] = None
+                     ) -> tuple[float, float]:
+    """Validate a gain or gain_range.
+
+    Args:
+        gain:
+        gain_range:
+    """
+    if gain_range is None:
+        if gain is None:
+            raise ValueError('Must specify either gain or gain_range.')
+
+        gain_range = (gain, gain)
+    else:
+        if gain is not None:
+            raise ValueError('gain and gain_range both provided.')
+
+    if len(gain_range) != 2:
+        raise ValueError('Range must be specified as two values.')
+
+    if gain_range[1] < gain_range[0]:
+        gain_range = (gain_range[1], gain_range[0])
+
+    return gain_range
+
+
 class SourceParams:
     """Collection of all lines for a gamma source."""
     _source_dict = dict()
 
     def __init__(self,
-                 energies: np.typing.NDArray[np.float64],
+                 energies: np.typing.ArrayLike,
                  name: Optional[str] = None
                  ) -> None:
         """Initialize the source with its energy.
@@ -56,8 +83,9 @@ class SourceParams:
             self._source_dict[name] = self
 
     def get_filter(self,
-                   points: np.typing.NDArray[np.long],
-                   gain: float
+                   points: np.typing.ArrayLike,
+                   gain: Optional[float] = None,
+                   gain_range: Optional[tuple[float, float]] = None
                    ) -> np.typing.NDArray[np.bool]:
         """Create a boolean array to remove points away from target energies.
 
@@ -68,10 +96,12 @@ class SourceParams:
         Returns:
             Boolean array, true for all points near an energy for this source.
         """
+        gain_range = check_gain_range(gain, gain_range)
+
         amplitudes = np.sum(points, axis=1)
 
-        energy_floor = gain * min(self.energies) / 2
-        energy_ceiling = gain * 2. * max(self.energies)
+        energy_floor = gain_range[0] * min(self.energies) / 2
+        energy_ceiling = gain_range[1] * 2. * max(self.energies)
 
         return (amplitudes >= energy_floor) & (amplitudes <= energy_ceiling)
 

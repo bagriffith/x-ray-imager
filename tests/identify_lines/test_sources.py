@@ -17,10 +17,37 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
 import pytest
 import numpy as np
-from x_ray_imager_bagriff.identify_lines\
-    import SourceParams
+from x_ray_imager_bagriff.identify_lines import (
+    SourceParams,
+    check_gain_range
+)
+
+
+def test_check_gain_range():
+    """Test `check_gain_range()` valid and invalid inputs."""
+    with pytest.raises(ValueError):
+        # No gains
+        check_gain_range()
+
+    with pytest.raises(ValueError):
+        # Both type of gain
+        check_gain_range(gain=1.0, gain_range=(1.0, 2.0))
+
+    with pytest.raises(ValueError):
+        # Two many endpoints.
+        check_gain_range(gain_range=(1.0, 2.0, 3.0))  # type: ignore
+
+    # Single gain
+    assert (2.0, 2.0) == check_gain_range(gain=2.0)
+
+    # Gain range
+    assert (1.0, 2.0) == check_gain_range(gain_range=(1.0, 2.0))
+
+    # Reversed
+    assert (1.0, 2.0) == check_gain_range(gain_range=(2.0, 1.0))
 
 
 def test_get_source():

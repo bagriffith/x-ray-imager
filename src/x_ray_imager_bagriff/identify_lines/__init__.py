@@ -19,12 +19,16 @@
 # SOFTWARE.
 
 """Characterize a x-ray imager from calibration data."""
+from ._sources import SourceParams, check_gain_range
+
 from ._identify import (
     find_centers,
     match_energy,
+    source_identify_all
 )
-from ._sources import SourceParams
 
 __all__ = ['find_centers',
            'match_energy',
+           'source_identify_all',
+           'check_gain_range',
            'SourceParams']

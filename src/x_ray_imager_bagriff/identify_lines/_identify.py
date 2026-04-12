@@ -18,19 +18,16 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Produce the mean response from each gamma line in a list of events.
-
-1. Applies Filters
-2. Clusters Events
-3. Done - Attributes clusters to spectral lines
-4. Done - Calculates mean response and other statistics
-"""
+"""Produce the mean response from each gamma line in a list of events."""
 import logging
 from typing import Optional
 from itertools import combinations
 import numpy as np
 from sklearn.base import ClusterMixin
-from x_ray_imager_bagriff.identify_lines._sources import SourceParams
+from x_ray_imager_bagriff.identify_lines import (
+    SourceParams,
+    check_gain_range
+)
 
 
 def source_identify_all(points: np.typing.NDArray[np.long],
@@ -53,15 +50,21 @@ def source_identify_all(points: np.typing.NDArray[np.long],
         Array of mean detector responses. Shape is
         (Number of detectors, Number of lines)
     """
-    # TODO: Implement
-    return np.array([], dtype=np.float64)
+    gain_range = check_gain_range(gain_range=gain_range)
+    points_continuous = points + np.random.uniform(size=np.shape(points))
+    in_range = source.get_filter(points_continuous, gain_range=gain_range)
+
+    cluster_id = cluster_method.fit_predict(points_continuous[in_range])
+    centers = find_centers(points, cluster_id)
+    matched_id, gain = match_energy(centers, source.energies, gain_range)
+    logging.info('Best fit gain is %s', gain)
+
+    return centers[matched_id]
 
 
 def find_centers(points: np.typing.NDArray[np.long],
                  labels: np.typing.NDArray[np.long]
-                 ) -> tuple[np.typing.NDArray[np.float64],
-                            np.typing.NDArray[np.float64],
-                            np.typing.NDArray[np.long]]:
+                 ) -> np.typing.NDArray[np.float64]:
     """Find mean, spread, and count of each point group.
 
     Args:
@@ -98,14 +101,16 @@ def find_centers(points: np.typing.NDArray[np.long],
                          f"{len(labels)} labels.")
 
     centers = np.ndarray((n_groups, n_detectors), dtype=np.float64)
+    # For debugging:
     spreads = np.ndarray((n_groups, n_detectors), dtype=np.float64)
     n_points = np.zeros(n_groups, dtype=np.long)
+
     for i in unique_label_ids:
         if i >= 0:
             centers[i, :] = np.mean(points[labels == i], axis=0)
             spreads[i, :] = np.std(points[labels == i], axis=0)
             n_points[i] = np.sum(labels == i)
-    return centers, spreads, n_points
+    return centers
 
 
 def match_energy(mean_response: np.typing.NDArray[np.float64],
@@ -148,6 +153,8 @@ def match_energy(mean_response: np.typing.NDArray[np.float64],
         # If not provided, use the largest conceivable range.
         gain_range = (min(amplitudes) / max(energies),
                       max(amplitudes) / min(energies))
+    else:
+        gain_range = check_gain_range(gain_range=gain_range)
 
     # Find the best mapping of clusters to energy lines
     min_error = np.inf
