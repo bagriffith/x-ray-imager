@@ -28,12 +28,14 @@ from x_ray_imager_bagriff.identify_lines import (
     SourceParams,
     check_gain_range
 )
+from x_ray_imager_bagriff.identify_lines.plot import GenericDiagnostic
 
 
 def source_identify_all(points: np.typing.NDArray[np.long],
                         cluster_method: ClusterMixin,
                         source: SourceParams,
-                        gain_range: Optional[tuple[float, float]] = None
+                        gain_range: Optional[tuple[float, float]] = None,
+                        diagnostic: Optional[GenericDiagnostic] = None
                         ) -> np.typing.NDArray[np.float64]:
     """Finds the mean value associated with every source gamma line.
 
@@ -55,6 +57,9 @@ def source_identify_all(points: np.typing.NDArray[np.long],
     in_range = source.get_filter(points_continuous, gain_range=gain_range)
 
     cluster_id = cluster_method.fit_predict(points_continuous[in_range])
+    if diagnostic is not None:
+        diagnostic.plot_diagnostic(points[in_range], cluster_id)
+
     centers = find_centers(points, cluster_id)
     matched_id, gain = match_energy(centers, source.energies, gain_range)
     logging.info('Best fit gain is %s', gain)
