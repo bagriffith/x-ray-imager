@@ -27,6 +27,7 @@ from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import numpy as np
 import x_ray_imager_bagriff
+from x_ray_imager_bagriff.position_estimation import anger_basis
 
 STYLE_FILE = str(resources.files(x_ray_imager_bagriff)
                  .joinpath('plot_style.mplstyle'))
@@ -88,7 +89,7 @@ class AngerDiagnostic(GenericDiagnostic):
         points = np.array(points, dtype=np.float64)[to_plot, :]
         labels = np.array(labels, dtype=np.long)[to_plot]
 
-        x, y = self._anger_metric(points)
+        _, x, y = anger_basis(points)
 
         for i in labels_used:
             ax.scatter(x[labels == i], y[labels == i], marker='o', s=0.25)
@@ -99,19 +100,19 @@ class AngerDiagnostic(GenericDiagnostic):
         ax.set_xlabel('T1 + T2 - (T3 + T4)')
         ax.set_ylabel('T2 + T3 - (T1 + T4)')
 
-    @staticmethod
-    def _anger_metric(points: np.typing.ArrayLike
-                      ) -> tuple[np.typing.NDArray[np.float64],
-                                 np.typing.NDArray[np.float64]]:
-        if np.shape(points)[1] != 4:
-            raise ValueError('Each event must have four values.')
+    # @staticmethod
+    # def _anger_metric(points: np.typing.ArrayLike
+    #                   ) -> tuple[np.typing.NDArray[np.float64],
+    #                              np.typing.NDArray[np.float64]]:
+    #     if np.shape(points)[1] != 4:
+    #         raise ValueError('Each event must have four values.')
 
-        amplitude = np.sum(points, axis=1)
-        amplitude[amplitude < 1] = np.nan
-        x = np.dot(points, [1, 1, -1, -1]) / amplitude
-        y = np.dot(points, [-1, 1, 1, -1]) / amplitude
+    #     amplitude = np.sum(points, axis=1)
+    #     amplitude[amplitude < 1] = np.nan
+    #     x = np.dot(points, [1, 1, -1, -1]) / amplitude
+    #     y = np.dot(points, [-1, 1, 1, -1]) / amplitude
 
-        return x, y
+    #     return x, y
 
 
 class AmplitudeDiagnostic(GenericDiagnostic):
