@@ -48,7 +48,7 @@ def test_source_identify_all():
         [np.random.poisson(x, size=(n_points, 4)) for x in means]
     )
 
-    cluster_labels = np.array([0]*n_points + [1]*n_points, dtype=np.long)
+    cluster_labels = np.repeat(np.arange(len(means)), n_points)
     mock_cluster = MockCluster(cluster_labels)
 
     source = SourceParams(means)
