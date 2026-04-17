@@ -22,11 +22,7 @@ import logging
 from scipy.interpolate import RegularGridInterpolator, make_interp_spline
 import numpy as np
 import xraydb
-
-
-def flip():
-    # TODO
-    pass
+from x_ray_imager_bagriff.response_interpolation import pca
 
 
 class Interpolation:
@@ -89,7 +85,7 @@ class CubicInterpolation(Interpolation):
         energies = np.array(energies)[ind]
         centers = np.moveaxis(centers[:, :, :, ind], 3, 0)
         positions = np.array(positions)
-        logger.debug(energies)
+        logging.debug(energies)
         # TODO, test that grid is rectancular
         x = positions[0, 0, :].copy()
         y = positions[1, :, 0].copy()
@@ -120,7 +116,7 @@ class PCAEnergyInterpolation(Interpolation):
         assert centers.shape[-2] == 4
         assert positions.shape[1:] == centers.shape[:2]
         assert positions.shape[1] * positions.shape[2] == basis.shape[0]
-        energies = np.double(energies)
+        energies = np.ndarray(energies, dtype=np.float64)
         # TODO, test that grid is rectancular
         x = positions[0, :, 0].copy()
         y = positions[1, 0, :].copy()
@@ -134,7 +130,7 @@ class PCAEnergyInterpolation(Interpolation):
                                     bounds_error=False)
 
         # data_proj = basis.T @ np.reshape(centers, (-1, centers.shape[0]))
-        flat_centers = np.reshape(flip(centers),
+        flat_centers = np.reshape(pca.flip(centers),
                                   (-1, *centers.shape[-2:]))
 
         data_proj = np.apply_along_axis(lambda v: np.dot(v, basis),
@@ -144,7 +140,8 @@ class PCAEnergyInterpolation(Interpolation):
         del flat_centers
         terms = basis_3d.shape[-1]
 
-        A = np.vstack([self.calc_e_lin(energies), np.ones(len(energies))]).T
+        A = np.vstack([self.calc_e_lin(energies),
+                       np.ones(len(energies))]).T
         y = np.empty(data_proj.shape)
 
         self.v1 = np.zeros((terms, 4))
@@ -179,15 +176,19 @@ class PCAEnergyInterpolation(Interpolation):
             i_r = min(points, i_l+max_step)
             # if i_l > 0:
             #     print(f'Running points {i_l} to {i_r}')
-            term_weights = (np.multiply.outer(self.v1, energy[i_l:i_r])
-                            + np.multiply.outer(self.v2, energy[i_l:i_r]*e_var[i_l:i_r]))
+            term_weights = (
+                np.multiply.outer(self.v1,
+                                  energy[i_l:i_r])
+                + np.multiply.outer(self.v2,
+                                    energy[i_l:i_r] * e_var[i_l:i_r])
+                )
 
             pos_interp_term = np.empty((*self.v1.shape, i_r-i_l))
             for tube in range(4):
-                flip_y, flip_x = nn_calibration.pca.flip_tube[tube]
+                flip_y, flip_x = pca.flip_tube[tube]
                 pos_interp_term[:, tube, :] = \
                     self.basis_interp(((-1. if flip_x else 1.)*x[i_l:i_r],
-                                    (-1. if flip_y else 1.)*y[i_l:i_r])).T
+                                      (-1. if flip_y else 1.)*y[i_l:i_r])).T
             result[i_l:i_r] = np.sum(pos_interp_term * term_weights, axis=0).T
         return result.reshape(shape_out)
 
