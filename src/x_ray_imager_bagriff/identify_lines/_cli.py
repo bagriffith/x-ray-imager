@@ -24,3 +24,5 @@ Needs to
 - Read in a file and identify gamma lines
 - Load a group of files and run all of them
 """
+
+# TODO: Add identify lines CLI

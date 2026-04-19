@@ -20,21 +20,31 @@
 
 """Clustering algorithms used to collect events with the same energy/position.
 
-TODO Full description.
+Every algorithms here should be a child of the scikit-learn's `ClusterMixin`.
 """
-from typing import Optional
+from typing import Any, Optional
 import logging
 from sklearn.base import ClusterMixin
 from sklearn.cluster import DBSCAN, KMeans
 import numpy as np
+from numpy.typing import ArrayLike
 
 
 class DBSCANFallbackKMeans(ClusterMixin):
+    """Clustering with DBSCAN, and if too few K-Means on the L1 norm."""
     def __init__(self,
                  min_clusters: int,
                  dbscan_kwargs: Optional[dict] = None,
                  kmeans_kwargs: Optional[dict] = None
                  ) -> None:
+        """Initialize the clustering instance.
+
+        Args:
+            min_clusters: Minimum clusters DBSCAN must find, otherwise K-Means
+                is invoked.
+            dbscan_kwargs: Passed as kwargs to the scikit-learn's `DBSCAN`.
+            kmeans_kwargs: Passed as kwargs to the scikit-learn's `KMeans`.
+        """
         self.min_clusters = min_clusters
 
         if dbscan_kwargs is None:
@@ -45,11 +55,23 @@ class DBSCANFallbackKMeans(ClusterMixin):
 
         self.dbscan_cluster = DBSCAN(**dbscan_kwargs)
         self.kmeans_cluster = KMeans(self.min_clusters, **kmeans_kwargs)
+
+        self.labels_ = None  # To be filled in by `fit()`.
+
         super().__init__()
 
-    def fit(self, x: np.typing.ArrayLike):
-        x = np.array(x, dtype=np.float64)
-        self.labels_ = self.dbscan_cluster.fit(x).labels_
+    def fit(self,
+            X: ArrayLike,  # pylint: disable=invalid-name
+            y: Any = None,
+            sample_weight: ArrayLike | None = None):
+        """Preform DBSCAN then if too few clusters, K-Means on L1 norm.
+
+        Args:
+            X: Array of points to cluster.
+            y: Not used.
+        """
+        X = np.array(X, dtype=np.float64)
+        self.labels_ = self.dbscan_cluster.fit(X, y, sample_weight).labels_
 
         # Only positive labels are clusters.
         # -1 marks noisy (background) points.
@@ -61,8 +83,8 @@ class DBSCANFallbackKMeans(ClusterMixin):
         if n_clusters < self.min_clusters:
             logging.info('Min of %s clusters requested. Applying K-means.',
                          self.min_clusters)
-            amplitude = np.sum(x[in_cluster], axis=1).reshape(-1, 1)
-            kmeans_fit = self.kmeans_cluster.fit(amplitude)
+            norm = np.sum(X[in_cluster], axis=1).reshape(-1, 1)
+            kmeans_fit = self.kmeans_cluster.fit(norm, y, sample_weight)
             self.labels_[in_cluster] = kmeans_fit.labels_
             n_clusters = self.min_clusters
 

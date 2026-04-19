@@ -18,11 +18,21 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Produce the mean response from each gamma line in a list of events."""
+"""Tools to find the response for each gamma line from a source.
+
+Typical usage example:
+
+    data = np.loadtxt("imager-event-list.txt")
+    cluster_method = sklearn.cluster.KMeans()  # Or some other algorithm
+    source = SourceParams.get_source('Am241')
+
+    responses = source_identify_all(data, cluster_method, source, (1.0, 4.0))
+"""
 import logging
 from typing import Optional
 from itertools import combinations
 import numpy as np
+from numpy.typing import NDArray
 from sklearn.base import ClusterMixin
 from x_ray_imager_bagriff.identify_lines import (
     SourceParams,
@@ -31,68 +41,64 @@ from x_ray_imager_bagriff.identify_lines import (
 from x_ray_imager_bagriff.identify_lines.plot import GenericDiagnostic
 
 
-def source_identify_all(points: np.typing.NDArray[np.long],
+def source_identify_all(X: NDArray[np.long],  # pylint: disable=invalid-name
                         cluster_method: ClusterMixin,
                         source: SourceParams,
                         gain_range: Optional[tuple[float, float]] = None,
                         diagnostic: Optional[GenericDiagnostic] = None
-                        ) -> np.typing.NDArray[np.float64]:
+                        ) -> NDArray[np.float64]:
     """Finds the mean value associated with every source gamma line.
 
     Args:
-        points:
-            Array of detector values for a set of events.
-            Values are expected to be integers (discretized into channels).
-            Shape should be (number of events, number of detectors).
-        cluster_method:
-        source:
-        gain_range:
+        X: Array where each row is a set of measurements from a single
+            gamma ray. It should be integer values (response readout was
+            discretized into channels).
+        cluster_method: Method from scikit-learn.clustering (or similar).
+            It groups similar events, labeling each with an asscending int
+            starting at 0. Background points should be labeled -1.
+        source: Collection of properties for the gamma source.
+        gain_range: The max and min reasonable gain (dector response / energy).
 
     Returns:
         Array of mean detector responses. Shape is
-        (Number of detectors, Number of lines)
+        (Number of detectors, Number of gamma lines)
     """
     gain_range = check_gain_range(gain_range=gain_range)
-    points_continuous = points + np.random.uniform(size=np.shape(points))
-    in_range = source.get_filter(points_continuous, gain_range=gain_range)
+    continuous = X + np.random.uniform(size=np.shape(X))
+    in_range = source.get_filter(continuous, gain_range=gain_range)
 
-    cluster_id = cluster_method.fit_predict(points_continuous[in_range])
+    cluster_id = cluster_method.fit_predict(continuous[in_range])
     if diagnostic is not None:
-        diagnostic.plot_diagnostic(points[in_range], cluster_id)
+        diagnostic.plot_diagnostic(X[in_range], cluster_id)
 
-    centers = find_centers(points, cluster_id)
+    centers = find_centers(X, cluster_id)
     matched_id, gain = match_energy(centers, source.energies, gain_range)
     logging.info('Best fit gain is %s', gain)
 
     return centers[matched_id]
 
 
-def find_centers(points: np.typing.NDArray[np.long],
-                 labels: np.typing.NDArray[np.long]
-                 ) -> np.typing.NDArray[np.float64]:
-    """Find mean, spread, and count of each point group.
+def find_centers(X: NDArray[np.long],  # pylint: disable=invalid-name
+                 labels: NDArray[np.long]
+                 ) -> NDArray[np.float64]:
+    """Find mean for each point group.
 
     Args:
-        points:
-            Array of detector values for a set of events.
-            See `source_identify_all()` for more.
-        labels:
-            Integer indexed group identity of each event. It is assumed
+        X: Array of detector values for a set of events. See
+            `source_identify_all()` for more.
+        labels: Integer indexed group identity of each event. It is assumed
             that all labels from 0 to max(labels) are options, even if not
             used. Negative labels may be included, but will be ignored.
 
     Returns:
-        A tuple (centers, spreads, n_points), where centers is an am Array
-        of the mean value for each detector in each labeled group, spreads
-        is the same but for standard deviation, and n_points is the count
-        in each group.
+        An am Array of the mean value for each detector in each labeled group.
 
     Raises:
         ValueError: Error if len(labels) isn't the number of events in points.
     """
     unique_label_ids = set(labels)
     n_groups = max(max(unique_label_ids) + 1, 0)  # Number of groups
-    n_events, n_detectors = np.shape(points)      # Number of PMTs/SiPMs
+    n_events, n_detectors = np.shape(X)      # Number of PMTs/SiPMs
 
     if n_detectors != 4:
         # BOOMS uses 4 PMTs. Other projects may need a different number, but
@@ -112,16 +118,16 @@ def find_centers(points: np.typing.NDArray[np.long],
 
     for i in unique_label_ids:
         if i >= 0:
-            centers[i, :] = np.mean(points[labels == i], axis=0)
-            spreads[i, :] = np.std(points[labels == i], axis=0)
+            centers[i, :] = np.mean(X[labels == i], axis=0)
+            spreads[i, :] = np.std(X[labels == i], axis=0)
             n_points[i] = np.sum(labels == i)
     return centers
 
 
-def match_energy(mean_response: np.typing.NDArray[np.float64],
-                 energies: np.typing.NDArray[np.float64],
+def match_energy(mean_response: NDArray[np.float64],
+                 energies: NDArray[np.float64],
                  gain_range: Optional[tuple[float, float]] = None
-                 ) -> tuple[np.typing.NDArray[np.long], float]:
+                 ) -> tuple[NDArray[np.long], float]:
     """Matches a list of spectral lines with the mean detector response.
 
     This takes in a list of mean detector responses. The sum of all
@@ -131,18 +137,15 @@ def match_energy(mean_response: np.typing.NDArray[np.float64],
     do should all have the same energy scaling.
 
     Args:
-        mean_response:
-            An array of detector values associated with the mean of some
-            feature in a calibration set. len(energies) of these are from
-            the gamma spectral lines listed there, and rest are other
+        mean_response: An array of detector values associated with the mean
+            of some feature in a calibration set. len(energies) of these are
+            from the gamma spectral lines listed there, and rest are other
             features.
-        energies:
-            An array listing some of the spectral lines captured. There
+        energies: An array listing some of the spectral lines captured. There
             should be fewer than the number of mean responses. Specific
             units are not required, but will change the meaning of the gain
             returned.
-        gain_range:
-            Tuple setting the minimum and maximum gain that will be
+        gain_range: Tuple setting the minimum and maximum gain that will be
             accepted as for the returned association.
 
     Returns:
@@ -150,6 +153,9 @@ def match_energy(mean_response: np.typing.NDArray[np.float64],
         that selects the mean_response that best matches energy in that same
         array position. gain is the associated dector response / energy, in
         the units used for those arguments, associated with best mapping.
+    
+    Raises:
+        
     """
     amplitudes = np.sum(mean_response, axis=1)
     energies_sorted = np.sort(energies)  # Sort in case they aren't already

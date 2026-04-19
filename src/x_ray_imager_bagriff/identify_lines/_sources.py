@@ -18,13 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""SourceParams class to manage calibration source energy and features.
-
-Needs:
-    - Lookup by name
-    - List of gamma lines
-    - Block out regions
-"""
+"""SourceParams class to manage calibration source energy and features."""
 from typing import Optional, Self
 import logging
 import numpy as np
@@ -36,8 +30,16 @@ def check_gain_range(gain: Optional[float] = None,
     """Validate a gain or gain_range.
 
     Args:
-        gain:
+        gain: The max and min gain (dector response / energy).
         gain_range:
+
+    Returns:
+        Tuple of the either `gain_range` or `gain` twice,ordered
+        (smallest, largest).
+
+    Raises:
+        ValueError: `gain_range` is invalid. Also if too many or too few
+            arguments are provided.
     """
     if gain_range is None:
         if gain is None:
@@ -52,6 +54,7 @@ def check_gain_range(gain: Optional[float] = None,
         raise ValueError('Range must be specified as two values.')
 
     if gain_range[1] < gain_range[0]:
+        logging.warning("Gain range was reversed: %s.", gain_range)
         gain_range = (gain_range[1], gain_range[0])
 
     return gain_range
@@ -68,18 +71,20 @@ class SourceParams:
         """Initialize the source with its energy.
 
         Args:
-            energies:
-                Array of source lines in keV
-            name:
-                Name of source. For example, 'Ba133'. No form is required,
-                but the [Element Abbreviation][Isotope] is used for all
-                provided sources.
+            energies: Array of source lines in keV
+            name: Name of source. For example, 'Ba133'. No form is
+                required, but the [Element Abbreviation][Isotope]
+                is used for all provided sources.
         """
         self.energies = np.array(energies, dtype=np.float64)
+        if len(self.energies) == 0:
+            # Empty list is valid, but unlikely to be used outside an error.
+            logging.warning("Empty list of energies for SourceParams %s.",
+                            name)
 
         if name is not None:
             if name in self._source_dict:
-                logging.warning('Overwriting SourceParam entry for %s', name)
+                logging.warning('Overwriting SourceParams entry for %s', name)
             self._source_dict[name] = self
 
     def get_filter(self,
@@ -92,9 +97,13 @@ class SourceParams:
         Args:
             points: Array of detector values for a set of events.
             gain: Detector gain in (points units) / keV.
+            gain_range: Expand the filters to cover this entire gain range.
 
         Returns:
             Boolean array, true for all points near an energy for this source.
+
+        Raises:
+            ValueError: An invalid gain/gain range is provided.
         """
         gain_range = check_gain_range(gain, gain_range)
 
@@ -107,7 +116,11 @@ class SourceParams:
 
     @classmethod
     def get_source(cls, name: str) -> Self:
-        """For a named isotope, return its """
+        """For a named isotope, return its SourceParams if created.
+
+        Args:
+            name: Name of source used at creation.
+        """
         if name in cls._source_dict:
             return cls._source_dict[name]
         else:
