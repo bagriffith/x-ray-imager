@@ -22,8 +22,9 @@ from x_ray_imager_bagriff.position_estimation import PointEstimator
 
 
 def anger_basis(points):
-    amplitude = np.sum(points, axis=1)
-    amplitude[amplitude < 1] = np.nan
+    # TODO Test shape
+    amplitude = np.sum(points, axis=1, dtype=np.float64)
+    amplitude[amplitude < 1.] = np.nan
 
     x = np.dot(points, [1, 1, -1, -1]) / amplitude
     y = np.dot(points, [-1, 1, 1, -1]) / amplitude
@@ -37,9 +38,8 @@ class AngerSimple(PointEstimator):
     def __init__(self, channels, energies, positions):
         amp, x, y = anger_basis(channels)
 
-        self.a_x = 70 / np.max(np.abs(x))
-        self.a_y = 70 / np.max(np.abs(y))
-
+        self.a_x = np.max(np.abs(positions)) / np.max(np.abs(x))
+        self.a_y = np.max(np.abs(positions)) / np.max(np.abs(y))
         self.a_e = np.mean(amp/energies)
 
     def get_value(self, channels, return_error=False):
