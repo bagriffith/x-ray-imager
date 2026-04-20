@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Interpolate between calibration source positions and energies."""
 import logging
 from scipy.interpolate import RegularGridInterpolator, make_interp_spline
 import numpy as np
@@ -83,7 +84,7 @@ class CubicInterpolation(Interpolation):
     def __init__(self, energies, positions, centers):
         ind = np.argsort(energies)
         energies = np.array(energies)[ind]
-        centers = np.moveaxis(centers[:, :, :, ind], 3, 0)
+        centers = centers[ind, :, :, :]
         positions = np.array(positions)
         logging.debug(energies)
         # TODO, test that grid is rectancular
