@@ -82,15 +82,20 @@ class SourceParams:
             logging.warning("Empty list of energies for SourceParams %s.",
                             name)
 
+        self.name = name
         if name is not None:
             if name in self._source_dict:
                 logging.warning('Overwriting SourceParams entry for %s', name)
             self._source_dict[name] = self
 
+    def __len__(self):
+        return len(self.energies)
+
     def get_filter(self,
                    points: np.typing.ArrayLike,
                    gain: Optional[float] = None,
-                   gain_range: Optional[tuple[float, float]] = None
+                   gain_range: Optional[tuple[float, float]] = None,
+                   bumper: Optional[float] = 1.5
                    ) -> np.typing.NDArray[np.bool]:
         """Create a boolean array to remove points away from target energies.
 
@@ -107,10 +112,14 @@ class SourceParams:
         """
         gain_range = check_gain_range(gain, gain_range)
 
+        if gain_range is None:
+            return np.full(np.shape(points)[0], True)
+
         amplitudes = np.sum(points, axis=1)
 
-        energy_floor = gain_range[0] * min(self.energies) / 2
-        energy_ceiling = gain_range[1] * 2. * max(self.energies)
+        energy_floor = gain_range[0] * min(self.energies) / bumper
+        energy_ceiling = gain_range[1] * bumper * max(self.energies)
+        logging.info('Energy_range: %f.1 %f.1', energy_floor, energy_ceiling)
 
         return (amplitudes >= energy_floor) & (amplitudes <= energy_ceiling)
 
@@ -126,6 +135,10 @@ class SourceParams:
         else:
             logging.warning("No source named %s.", name)
             return cls([])
+
+    @classmethod
+    def source_choices(cls):
+        return list(cls._source_dict.keys())
 
 
 # Add sources to the library

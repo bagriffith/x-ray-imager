@@ -48,7 +48,8 @@ class DBSCANFallbackKMeans(ClusterMixin):
         self.min_clusters = min_clusters
 
         if dbscan_kwargs is None:
-            dbscan_kwargs = {'metric': 'canberra'}
+            dbscan_kwargs = {'eps': 5.0,
+                             'min_samples': 1000}
 
         if kmeans_kwargs is None:
             kmeans_kwargs = {'n_init': 32}
@@ -78,13 +79,23 @@ class DBSCANFallbackKMeans(ClusterMixin):
         in_cluster = self.labels_ >= 0
         n_clusters = len(set(self.labels_[in_cluster]))
         logging.info('DBSCAN found %s clusters.', n_clusters)
+        if n_clusters == 0:
+            logging.warning('No clusters found.')
+            # Open all points for kmeans
+            self.labels_ = np.full_like(self.labels_, 0)
+            in_cluster = np.full_like(in_cluster, True)
+            n_clusters = 1
 
         # Split into enough clusters with KMeans
         if n_clusters < self.min_clusters:
             logging.info('Min of %s clusters requested. Applying K-means.',
                          self.min_clusters)
             norm = np.sum(X[in_cluster], axis=1).reshape(-1, 1)
-            kmeans_fit = self.kmeans_cluster.fit(norm, y, sample_weight)
+            kmeans_fit = self.kmeans_cluster.fit(
+                norm,
+                y if y is None else y[in_cluster],
+                sample_weight
+                if sample_weight is None else sample_weight[in_cluster])
             self.labels_[in_cluster] = kmeans_fit.labels_
             n_clusters = self.min_clusters
 

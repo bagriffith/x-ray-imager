@@ -17,6 +17,7 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+
 """Creates diagnostic plots for the line identification."""
 from typing import Optional
 from importlib import resources
@@ -151,7 +152,13 @@ class FullDiagnostic(AngerDiagnostic, AmplitudeDiagnostic):
         self.anger(ax_anger, points, labels)
 
 
+diagnostics = {'anger': AngerDiagnostic,
+               'amplitude': AmplitudeDiagnostic,
+               'full': FullDiagnostic}
+
+
 __all__ = ['GenericDiagnostic',
            'AngerDiagnostic',
            'AmplitudeDiagnostic',
-           'FullDiagnostic']
+           'FullDiagnostic',
+           'diagnostics']

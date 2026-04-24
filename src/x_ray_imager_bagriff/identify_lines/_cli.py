@@ -25,4 +25,53 @@ Needs to
 - Load a group of files and run all of them
 """
 
-# TODO: Add identify lines CLI
+import logging
+import click
+import numpy as np
+from sklearn import cluster as skcluster
+from x_ray_imager_bagriff.identify_lines import (
+    # DBSCANFallbackKMeans,
+    SourceParams,
+    source_identify_all
+)
+from x_ray_imager_bagriff.identify_lines.plot import diagnostics
+
+logger = logging.getLogger('x_ray_imager_bagriff')
+# ch = logging.StreamHandler()
+# ch.setLevel(logging.DEBUG)
+# logger.addHandler(ch)
+logger.setLevel(logging.DEBUG)
+
+# More clustering options could be added from sklearn.cluster
+# TODO: Fix this to handle sources.
+# ClusterChoice = click.Choice([DBSCANFallbackKMeans])
+SourceChoice = click.Choice(SourceParams.source_choices())
+DiagnosticChoice = click.Choice([None] + list(diagnostics.keys()))
+
+
+@click.group()
+def cli():
+    """Identify gamma line for x-ray imager calibration."""
+
+
+@cli.command('csv', short_help='Identify lines for one csv of measurements.')
+@click.argument('filename', type=click.File())
+@click.argument('source', type=SourceChoice)
+@click.option('--gain', nargs=2, type=float, default=None)
+@click.option('--diagnostic', type=DiagnosticChoice,
+              default=None)
+def csv(filename, source, gain, diagnostic):
+    events = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.long)
+    source = SourceParams.get_source(source)
+    if diagnostic is not None:
+        diagnostic = diagnostics[diagnostic]()  # Setup figure here.
+    # cluster = DBSCANFallbackKMeans(len(source))
+    # cluster = DBSCANFallbackKMeans(0)  # For testing diagnostics
+    cluster = skcluster.OPTICS(min_samples=250,
+                               max_eps=8,
+                               min_cluster_size=500)
+
+    responses = source_identify_all(events, cluster, source,
+                                    gain_range=gain,
+                                    diagnostic=diagnostic)
+    print(responses)

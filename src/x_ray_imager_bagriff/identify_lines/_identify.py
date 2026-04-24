@@ -40,6 +40,8 @@ from x_ray_imager_bagriff.identify_lines import (
 )
 from x_ray_imager_bagriff.identify_lines.plot import GenericDiagnostic
 
+logger = logging.getLogger(__name__)
+
 
 def source_identify_all(X: NDArray[np.long],  # pylint: disable=invalid-name
                         cluster_method: ClusterMixin,
@@ -63,17 +65,21 @@ def source_identify_all(X: NDArray[np.long],  # pylint: disable=invalid-name
         Array of mean detector responses. Shape is
         (Number of detectors, Number of gamma lines)
     """
-    gain_range = check_gain_range(gain_range=gain_range)
+    if gain_range is not None:
+        gain_range = check_gain_range(gain_range=gain_range)
+
+    logger.debug('Data shape %s', X.shape)
     continuous = X + np.random.uniform(size=np.shape(X))
     in_range = source.get_filter(continuous, gain_range=gain_range)
 
     cluster_id = cluster_method.fit_predict(continuous[in_range])
     if diagnostic is not None:
         diagnostic.plot_diagnostic(X[in_range], cluster_id)
+        diagnostic.savefig(f'{source.name}-diagnostic.png', dpi=300)
 
-    centers = find_centers(X, cluster_id)
+    centers = find_centers(X[in_range], cluster_id)
     matched_id, gain = match_energy(centers, source.energies, gain_range)
-    logging.info('Best fit gain is %s', gain)
+    logger.info('Best fit gain is %s', gain)
 
     return centers[matched_id]
 
@@ -103,8 +109,8 @@ def find_centers(X: NDArray[np.long],  # pylint: disable=invalid-name
     if n_detectors != 4:
         # BOOMS uses 4 PMTs. Other projects may need a different number, but
         # a very large number is likely a transposed array.
-        logging.warning("%s values per event, but 4 are expected.",
-                        n_detectors)
+        logger.warning("%s values per event, but 4 are expected.",
+                       n_detectors)
 
     if len(labels) != n_events:
         raise ValueError(f"{n_events}"
@@ -171,16 +177,19 @@ def match_energy(mean_response: NDArray[np.float64],
     min_error = np.inf
     best_mapping = np.full((len(energies)), -1, dtype=int)
     best_gain = np.nan
+    logger.debug('Finding best fit between %s and %s',
+                 amplitudes, energies)
 
     for trial_index in combinations(np.argsort(amplitudes), len(energies)):
         trial_index = np.array(trial_index, dtype=int)
         trial_amplitudes = amplitudes[trial_index]
+        logger.debug('Amplitudes: %s', trial_amplitudes)
         for gain_trial in np.arange(*gain_range, 0.1):
             diff = trial_amplitudes - gain_trial*energies_sorted
             error = np.linalg.norm(diff)
             if error < min_error:
-                logging.debug('Better index found: %s (error %s < %s)',
-                              trial_index, error, min_error)
+                logger.debug('Better index found: %s (error %s < %s)',
+                             trial_index, error, min_error)
                 min_error = error
                 best_mapping = trial_index
                 best_gain = gain_trial

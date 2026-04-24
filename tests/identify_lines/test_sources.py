@@ -72,5 +72,5 @@ def test_filter():
     filtered_correct = np.transpose([np.arange(50., 800., 10.)]*4)
 
     source = SourceParams(example_energies)
-    source_filter = source.get_filter(example_points, gain=4.0)
+    source_filter = source.get_filter(example_points, gain=4.0, bumper=2.0)
     assert example_points[source_filter] == pytest.approx(filtered_correct)
