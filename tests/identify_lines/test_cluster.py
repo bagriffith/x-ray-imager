@@ -20,7 +20,7 @@
 
 # import pytest
 import numpy as np
-from x_ray_imager_bagriff.identify_lines import DBSCANFallbackKMeans
+from x_ray_imager_bagriff.identify_lines import MinDBSCAN
 
 
 def test_dbscan_kmeans():
@@ -32,7 +32,7 @@ def test_dbscan_kmeans():
     )
 
     correct_labels = np.repeat(np.arange(len(means)), n_points)
-    cluster = DBSCANFallbackKMeans(2)
+    cluster = MinDBSCAN(2)
     identified_cluster = cluster.fit_predict(example_set)
     if identified_cluster[0] == 1:
         # Swap cluster names

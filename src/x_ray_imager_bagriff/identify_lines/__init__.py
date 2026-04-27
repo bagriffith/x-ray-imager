@@ -25,11 +25,12 @@ from ._identify import (
     match_energy,
     source_identify_all
 )
-from ._cluster import DBSCANFallbackKMeans
+from ._cluster import MinDBSCAN, MinOPTICS
 
 __all__ = ['find_centers',
            'match_energy',
            'source_identify_all',
            'check_gain_range',
            'SourceParams',
-           'DBSCANFallbackKMeans']
+           'MinDBSCAN',
+           'MinOPTICS']

@@ -23,6 +23,8 @@ from typing import Optional, Self
 import logging
 import numpy as np
 
+logger = logging.getLogger(__name__)
+
 
 def check_gain_range(gain: Optional[float] = None,
                      gain_range: Optional[tuple[float, float]] = None
@@ -54,7 +56,7 @@ def check_gain_range(gain: Optional[float] = None,
         raise ValueError('Range must be specified as two values.')
 
     if gain_range[1] < gain_range[0]:
-        logging.warning("Gain range was reversed: %s.", gain_range)
+        logger.warning("Gain range was reversed: %s.", gain_range)
         gain_range = (gain_range[1], gain_range[0])
 
     return gain_range
@@ -79,13 +81,13 @@ class SourceParams:
         self.energies = np.array(energies, dtype=np.float64)
         if len(self.energies) == 0:
             # Empty list is valid, but unlikely to be used outside an error.
-            logging.warning("Empty list of energies for SourceParams %s.",
-                            name)
+            logger.warning("Empty list of energies for SourceParams %s.",
+                           name)
 
         self.name = name
         if name is not None:
             if name in self._source_dict:
-                logging.warning('Overwriting SourceParams entry for %s', name)
+                logger.warning('Overwriting SourceParams entry for %s', name)
             self._source_dict[name] = self
 
     def __len__(self):
@@ -119,7 +121,7 @@ class SourceParams:
 
         energy_floor = gain_range[0] * min(self.energies) / bumper
         energy_ceiling = gain_range[1] * bumper * max(self.energies)
-        logging.info('Energy_range: %f.1 %f.1', energy_floor, energy_ceiling)
+        logger.info('Energy_range: %.1f %.1f', energy_floor, energy_ceiling)
 
         return (amplitudes >= energy_floor) & (amplitudes <= energy_ceiling)
 
@@ -133,7 +135,7 @@ class SourceParams:
         if name in cls._source_dict:
             return cls._source_dict[name]
         else:
-            logging.warning("No source named %s.", name)
+            logger.warning("No source named %s.", name)
             return cls([])
 
     @classmethod

@@ -30,29 +30,30 @@ import click
 import numpy as np
 from sklearn import cluster as skcluster
 from x_ray_imager_bagriff.identify_lines import (
-    # DBSCANFallbackKMeans,
+    MinOPTICS,
     SourceParams,
     source_identify_all
 )
 from x_ray_imager_bagriff.identify_lines.plot import diagnostics
 
-logger = logging.getLogger('x_ray_imager_bagriff')
-# ch = logging.StreamHandler()
-# ch.setLevel(logging.DEBUG)
-# logger.addHandler(ch)
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger('x_ray_imager_bagriff.identify_lines')
 
 # More clustering options could be added from sklearn.cluster
 # TODO: Fix this to handle sources.
-# ClusterChoice = click.Choice([DBSCANFallbackKMeans])
+# ClusterChoice = click.Choice([MinDBSCAN])
 SourceChoice = click.Choice(SourceParams.source_choices())
 DiagnosticChoice = click.Choice([None] + list(diagnostics.keys()))
 
 
 @click.group()
-def cli():
+@click.option('--verbose', '-v', 'log_level',
+              flag_value=logging.INFO, default=logging.WARNING)
+@click.option('--debug', '-d', 'log_level', flag_value=logging.DEBUG)
+def cli(log_level):
     """Identify gamma line for x-ray imager calibration."""
-
+    logger.setLevel(log_level)
+    handler = logging.StreamHandler()
+    logger.addHandler(handler)
 
 @cli.command('csv', short_help='Identify lines for one csv of measurements.')
 @click.argument('filename', type=click.File())
@@ -65,11 +66,12 @@ def csv(filename, source, gain, diagnostic):
     source = SourceParams.get_source(source)
     if diagnostic is not None:
         diagnostic = diagnostics[diagnostic]()  # Setup figure here.
-    # cluster = DBSCANFallbackKMeans(len(source))
-    # cluster = DBSCANFallbackKMeans(0)  # For testing diagnostics
-    cluster = skcluster.OPTICS(min_samples=250,
-                               max_eps=8,
-                               min_cluster_size=500)
+
+    logger.debug('Running clustering.')
+    cluster = MinOPTICS(min_clusters=len(source),
+                        min_samples=250,
+                        max_eps=8,
+                        min_cluster_size=500)
 
     responses = source_identify_all(events, cluster, source,
                                     gain_range=gain,

@@ -25,62 +25,46 @@ Every algorithms here should be a child of the scikit-learn's `ClusterMixin`.
 from typing import Any, Optional
 import logging
 from sklearn.base import ClusterMixin
-from sklearn.cluster import DBSCAN, KMeans
+from sklearn.cluster import DBSCAN, OPTICS, KMeans
 import numpy as np
 from numpy.typing import ArrayLike
 
+logger = logging.getLogger(__name__)
 
-class DBSCANFallbackKMeans(ClusterMixin):
-    """Clustering with DBSCAN, and if too few K-Means on the L1 norm."""
-    def __init__(self,
-                 min_clusters: int,
-                 dbscan_kwargs: Optional[dict] = None,
-                 kmeans_kwargs: Optional[dict] = None
-                 ) -> None:
-        """Initialize the clustering instance.
 
-        Args:
-            min_clusters: Minimum clusters DBSCAN must find, otherwise K-Means
-                is invoked.
-            dbscan_kwargs: Passed as kwargs to the scikit-learn's `DBSCAN`.
-            kmeans_kwargs: Passed as kwargs to the scikit-learn's `KMeans`.
-        """
-        self.min_clusters = min_clusters
+class KMeansMin(ClusterMixin):
+    """Mixin for clustering to ensure a min number of clusters with K-Means."""
+    def __init__(self, **kwargs) -> None:
+        self.labels_ = None
 
-        if dbscan_kwargs is None:
-            dbscan_kwargs = {'eps': 5.0,
-                             'min_samples': 1000}
+        if not hasattr(self, 'kmeans_kwargs'):
+            self.kmeans_kwargs = None
 
-        if kmeans_kwargs is None:
-            kmeans_kwargs = {'n_init': 32}
+        if not hasattr(self, 'min_clusters'):
+            self.min_clusters = 0
 
-        self.dbscan_cluster = DBSCAN(**dbscan_kwargs)
-        self.kmeans_cluster = KMeans(self.min_clusters, **kmeans_kwargs)
+        # Default K-Means args
+        kmeans_kwargs = {'n_init': 32}
 
-        self.labels_ = None  # To be filled in by `fit()`.
+        if self.kmeans_kwargs is not None:
+            kmeans_kwargs.update(self.kmeans_kwargs)
 
+        self.kmeans_kwargs = kmeans_kwargs
+
+        self.kmeans_cluster = KMeans(self.min_clusters, **self.kmeans_kwargs)
         super().__init__()
 
-    def fit(self,
-            X: ArrayLike,  # pylint: disable=invalid-name
-            y: Any = None,
-            sample_weight: ArrayLike | None = None):
-        """Preform DBSCAN then if too few clusters, K-Means on L1 norm.
+    def fit_predict(self,
+                    X: ArrayLike,  # pylint: disable=invalid-name
+                    y: Any = None):
+        """Apply K-Means as backup."""
+        super().fit_predict(X, y)
 
-        Args:
-            X: Array of points to cluster.
-            y: Not used.
-        """
-        X = np.array(X, dtype=np.float64)
-        self.labels_ = self.dbscan_cluster.fit(X, y, sample_weight).labels_
-
-        # Only positive labels are clusters.
-        # -1 marks noisy (background) points.
         in_cluster = self.labels_ >= 0
         n_clusters = len(set(self.labels_[in_cluster]))
-        logging.info('DBSCAN found %s clusters.', n_clusters)
+        logger.info('First clustering found %s clusters.', n_clusters)
         if n_clusters == 0:
-            logging.warning('No clusters found.')
+            logger.warning('No clusters found.')
             # Open all points for kmeans
             self.labels_ = np.full_like(self.labels_, 0)
             in_cluster = np.full_like(in_cluster, True)
@@ -88,15 +72,49 @@ class DBSCANFallbackKMeans(ClusterMixin):
 
         # Split into enough clusters with KMeans
         if n_clusters < self.min_clusters:
-            logging.info('Min of %s clusters requested. Applying K-means.',
-                         self.min_clusters)
+            logger.info('Min of %s clusters requested. Applying K-means.',
+                        self.min_clusters)
             norm = np.sum(X[in_cluster], axis=1).reshape(-1, 1)
             kmeans_fit = self.kmeans_cluster.fit(
                 norm,
-                y if y is None else y[in_cluster],
-                sample_weight
-                if sample_weight is None else sample_weight[in_cluster])
+                y if y is None else y[in_cluster])
             self.labels_[in_cluster] = kmeans_fit.labels_
             n_clusters = self.min_clusters
 
-        return self
+        return self.labels_
+
+
+class MinDBSCAN(KMeansMin, DBSCAN):
+    def __init__(self,
+                 min_clusters: int,
+                 kmeans_kwargs: Optional[dict] = None,
+                 **kwargs
+                 ) -> None:
+        """ """
+        if kmeans_kwargs is None:
+            kmeans_kwargs = dict()
+
+        self.kmeans_kwargs = kmeans_kwargs
+        self.min_clusters = min_clusters
+
+        super().__init__(**kwargs)
+
+
+class MinOPTICS(KMeansMin):
+    def __init__(self,
+                 min_clusters: int,
+                 kmeans_kwargs: Optional[dict] = None,
+                 **kwargs
+                 ) -> None:
+        """ """
+        if kmeans_kwargs is None:
+            kmeans_kwargs = dict()
+
+        self.kmeans_kwargs = kmeans_kwargs
+        self.min_clusters = min_clusters
+        super().__init__()
+        self.optics = OPTICS(**kwargs)
+
+    def fit(self, X, y=None):
+        self.optics.fit(X, y)
+        self.labels_ = self.optics.labels_
