@@ -25,9 +25,11 @@ Needs to
 - Load a group of files and run all of them
 """
 
+import csv
 import logging
 import click
 import numpy as np
+import pandas as pd
 from sklearn import cluster as skcluster
 from x_ray_imager_bagriff.identify_lines import (
     MinOPTICS,
@@ -55,19 +57,18 @@ def cli(log_level):
     handler = logging.StreamHandler()
     logger.addHandler(handler)
 
-@cli.command('csv', short_help='Identify lines for one csv of measurements.')
+@cli.command('point', short_help='Identify lines for one csv of measurements.')
 @click.argument('filename', type=click.File())
 @click.argument('source', type=SourceChoice)
 @click.option('--gain', nargs=2, type=float, default=None)
 @click.option('--diagnostic', type=DiagnosticChoice,
               default=None)
-def csv(filename, source, gain, diagnostic):
+def point(filename, source, gain, diagnostic):
     events = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.long)
     source = SourceParams.get_source(source)
     if diagnostic is not None:
         diagnostic = diagnostics[diagnostic]()  # Setup figure here.
 
-    logger.debug('Running clustering.')
     cluster = MinOPTICS(min_clusters=len(source),
                         min_samples=250,
                         max_eps=8,
@@ -77,3 +78,36 @@ def csv(filename, source, gain, diagnostic):
                                     gain_range=gain,
                                     diagnostic=diagnostic)
     print(responses)
+
+
+@cli.command('grid', short_help='Identify lines at each point in a grid.')
+@click.argument('filename', type=click.File())
+@click.argument('source', type=SourceChoice)
+@click.option('--gain', nargs=2, type=float, default=None)
+@click.option('--output', '-o', type=click.File(mode='w'), default='-')
+def grid(filename, source, gain, output):
+    logger.debug('file: %s source %s output %s', filename, source, output)
+    df = pd.read_csv(filename)
+    source = SourceParams.get_source(source)
+
+    cluster = MinOPTICS(min_clusters=len(source),
+                        min_samples=250,
+                        max_eps=8,
+                        min_cluster_size=500)
+
+    line_cols = [f'{x:.1f} keV T{n}' for n in range(4)
+                 for x in source.energies]
+
+    df[line_cols] = df[['csv_path']].apply(
+        lambda x: source_identify_all(
+            np.loadtxt(x['csv_path'],
+                       delimiter=',',
+                       skiprows=1,
+                       dtype=np.long),
+            cluster,
+            source,
+            gain_range=gain).flatten(),
+        axis=1,
+        result_type="expand")
+
+    df.to_csv(output, index=False, quoting=csv.QUOTE_NONNUMERIC)
