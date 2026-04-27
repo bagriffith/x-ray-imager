@@ -34,6 +34,7 @@ def test_dbscan_kmeans():
     correct_labels = np.repeat(np.arange(len(means)), n_points)
     cluster = MinDBSCAN(2)
     identified_cluster = cluster.fit_predict(example_set)
+    assert identified_cluster is not None
     if identified_cluster[0] == 1:
         # Swap cluster names
         identified_cluster = np.array([1, 0])[identified_cluster]

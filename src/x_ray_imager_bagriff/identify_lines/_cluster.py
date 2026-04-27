@@ -60,6 +60,9 @@ class KMeansMin(ClusterMixin):
         """Apply K-Means as backup."""
         super().fit_predict(X, y)
 
+        if self.labels_ is None:
+            raise RuntimeError('No labels created.')
+
         in_cluster = self.labels_ >= 0
         n_clusters = len(set(self.labels_[in_cluster]))
         logger.info('First clustering found %s clusters.', n_clusters)
