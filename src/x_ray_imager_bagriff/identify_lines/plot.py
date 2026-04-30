@@ -27,6 +27,7 @@ import matplotlib as mpl
 from matplotlib.figure import Figure
 from matplotlib.axes import Axes
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 import x_ray_imager_bagriff
 from x_ray_imager_bagriff.position_estimation import anger_basis
 
@@ -34,7 +35,7 @@ STYLE_FILE = str(resources.files(x_ray_imager_bagriff)
                  .joinpath('plot_style.mplstyle'))
 
 
-class GenericDiagnostic(Figure):
+class GenericIdentifyDiagnostic(Figure):
     def __init__(self, *args,
                  rc_params: Optional[dict] = None,
                  **kwargs) -> None:
@@ -49,31 +50,31 @@ class GenericDiagnostic(Figure):
         super().__init__(*args, **kwargs)
 
     def plot_diagnostic(self,
-                        points: np.typing.ArrayLike,
-                        labels: Optional[np.typing.NDArray[np.long]] = None
+                        points: ArrayLike,
+                        labels: Optional[NDArray[np.long]] = None
                         ) -> None:
         with plt.rc_context(self.rc_params):
             self._diagnostic(points, labels)
 
     def _diagnostic(self,
-                    points: np.typing.ArrayLike,
-                    labels: Optional[np.typing.NDArray[np.long]] = None
+                    points: ArrayLike,
+                    labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         pass
 
 
-class AngerDiagnostic(GenericDiagnostic):
+class AngerDiagnostic(GenericIdentifyDiagnostic):
     def _diagnostic(self,
-                    points: np.typing.ArrayLike,
-                    labels: Optional[np.typing.NDArray[np.long]] = None
+                    points: ArrayLike,
+                    labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         ax = self.subplots()
         self.anger(ax, points, labels)
 
     def anger(self,
               ax: Axes,
-              points: np.typing.ArrayLike,
-              labels: Optional[np.typing.NDArray[np.long]] = None,
+              points: ArrayLike,
+              labels: Optional[NDArray[np.long]] = None,
               limit_points: Optional[int] = 1000
               ) -> None:
         
@@ -102,9 +103,9 @@ class AngerDiagnostic(GenericDiagnostic):
         ax.set_ylabel('T2 + T3 - (T1 + T4)')
 
     # @staticmethod
-    # def _anger_metric(points: np.typing.ArrayLike
-    #                   ) -> tuple[np.typing.NDArray[np.float64],
-    #                              np.typing.NDArray[np.float64]]:
+    # def _anger_metric(points: ArrayLike
+    #                   ) -> tuple[NDArray[np.float64],
+    #                              NDArray[np.float64]]:
     #     if np.shape(points)[1] != 4:
     #         raise ValueError('Each event must have four values.')
 
@@ -116,18 +117,18 @@ class AngerDiagnostic(GenericDiagnostic):
     #     return x, y
 
 
-class AmplitudeDiagnostic(GenericDiagnostic):
+class AmplitudeDiagnostic(GenericIdentifyDiagnostic):
     def _diagnostic(self,
-                    points: np.typing.ArrayLike,
-                    labels: Optional[np.typing.NDArray[np.long]] = None
+                    points: ArrayLike,
+                    labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         ax = self.subplots()
         self.amplitude_hist(ax, points, labels)
 
     def amplitude_hist(self,
                        ax: Axes,
-                       points: np.typing.ArrayLike,
-                       labels: Optional[np.typing.NDArray[np.long]] = None
+                       points: ArrayLike,
+                       labels: Optional[NDArray[np.long]] = None
                        ) -> None:
         points = np.array(points, dtype=np.float64)
 
@@ -144,8 +145,8 @@ class AmplitudeDiagnostic(GenericDiagnostic):
 
 class FullDiagnostic(AngerDiagnostic, AmplitudeDiagnostic):
     def _diagnostic(self,
-                    points: np.typing.ArrayLike,
-                    labels: Optional[np.typing.NDArray[np.long]] = None
+                    points: ArrayLike,
+                    labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         ax_hist, ax_anger = self.subplots(2)
         self.amplitude_hist(ax_hist, points, labels)
@@ -157,7 +158,7 @@ diagnostics = {'anger': AngerDiagnostic,
                'full': FullDiagnostic}
 
 
-__all__ = ['GenericDiagnostic',
+__all__ = ['GenericIdentifyDiagnostic',
            'AngerDiagnostic',
            'AmplitudeDiagnostic',
            'FullDiagnostic',

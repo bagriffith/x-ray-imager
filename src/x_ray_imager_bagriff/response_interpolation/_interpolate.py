@@ -27,16 +27,23 @@ from x_ray_imager_bagriff.response_interpolation import pca
 
 
 class Interpolation:
-    def __init__(self, energies, positions, centers):
+    def __init__(self, energy, positions, centers,
+                 input_diagnostic=None, error_diagnostic=None):
         logging.debug('Centers shape: %s', centers.shape)
+        if input_diagnostic is not None:
+            for i, e in enumerate(energy):
+                input_diagnostic.plot_diagnostic(centers[i], positions)
+                input_diagnostic.savefig(f'in-{e:.1f}keV.png', dpi=300)
+
         max_error = 0.
         mean_error = 0.
 
-        for i, e in enumerate(energies):
+        for i, e in enumerate(energy):
             max_error_e, mean_error_e = \
-                self.validate(e, positions, centers[:, :, :, i])
+                self.validate(e, positions, centers[:, :, :, i],
+                              error_diagnostic)
             max_error = max(max_error, max_error_e)
-            mean_error += mean_error_e/len(energies)
+            mean_error += mean_error_e/len(energy)
 
         logging.info('Interpolation Statistics:')
         logging.info('\tMean Error: %.2f', mean_error)
@@ -48,21 +55,14 @@ class Interpolation:
     def values(self, energy, x, y):
         return
 
-    def validate(self, energy, positions, centers, diagnostic=None):
+    def validate(self, energy, positions, centers,
+                 output_diagnostic=None, error_diagnostic=None):
         interp_centers = np.empty((*positions.shape[1:], 4))
         for idx in np.ndindex(positions.shape[1:]):
             interp_centers[idx] = self([energy], [positions[0, :, :][idx]],
                                        [positions[1, :, :][idx]])
 
         errors = interp_centers - centers
-        if diagnostic is not None:
-            pass
-            # TODO Plot input data
-            # diagnostic.
-            # plot.grid_colormesh(positions[0, :, :],
-            #                     positions[1, :, :],
-            #                     errors,
-            #                     label=f'error_{energy:.1f}keV')
 
         x_hr = np.linspace(np.min(positions[0, :, :]),
                            np.max(positions[0, :, :]), 70)
@@ -74,9 +74,16 @@ class Interpolation:
         for idx in np.ndindex(X.shape):
             Z[idx] = self([energy], [X[idx]], [Y[idx]])
 
-        if diagnostic is not None:
-            pass
-            # plot.grid(x_hr, y_hr, Z, label=f'interp_{energy:.1f}keV')
+        if output_diagnostic is not None:
+            for i, e in enumerate(energy):
+                output_diagnostic.plot_diagnostic(Z[i], [X, Y])
+                output_diagnostic.savefig(f'out-{e:.1f}keV.png', dpi=300)
+
+        if error_diagnostic is not None:
+            for i, e in enumerate(energy):
+                error_diagnostic.plot_diagnostic(errors, positions)
+                error_diagnostic.savefig(f'error-{e:.1f}keV.png', dpi=300)
+
         return np.max(np.abs(errors)), np.mean(np.abs(errors))
 
 
@@ -90,12 +97,6 @@ class CubicInterpolation(Interpolation):
         # TODO, test that grid is rectancular
         x = positions[0, 0, :].copy()
         y = positions[1, :, 0].copy()
-
-        # TODO Diagnostic plots
-        # for i, e in enumerate(energies):
-        #     X, Y = np.meshgrid(x, y)
-        #     nn_calibration.plot.grid(X, Y, centers[i, :, :, :],
-        #                              label=f'{e}keV')
 
         self.grid_interp = \
             RegularGridInterpolator([energies, x, y], centers,
@@ -153,12 +154,6 @@ class PCAEnergyInterpolation(Interpolation):
                                                 energies)
                 self.v2[i, tube], self.v1[i, tube] = \
                     np.linalg.lstsq(A, y[i, tube, :], rcond=None)[0]
-            # TODO Diagnostic plots
-            # label = f'pca_tube_{tube}'
-            # nn_calibration.plot.pca_interp(A[:, 0], y[:, tube, :],
-            #                                (self.v1[:, tube],
-            #                                 self.v2[:, tube]),
-            #                                 label)
 
         super().__init__(energies, positions, centers)
 

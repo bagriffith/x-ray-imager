@@ -38,7 +38,7 @@ from x_ray_imager_bagriff.identify_lines import (
     SourceParams,
     check_gain_range
 )
-from x_ray_imager_bagriff.identify_lines.plot import GenericDiagnostic
+from x_ray_imager_bagriff.identify_lines.plot import GenericIdentifyDiagnostic
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def source_identify_all(X: NDArray[np.long],  # pylint: disable=invalid-name
                         cluster_method: ClusterMixin,
                         source: SourceParams,
                         gain_range: Optional[tuple[float, float]] = None,
-                        diagnostic: Optional[GenericDiagnostic] = None
+                        diagnostic: Optional[GenericIdentifyDiagnostic] = None
                         ) -> NDArray[np.float64]:
     """Finds the mean value associated with every source gamma line.
 
