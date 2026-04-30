@@ -28,9 +28,11 @@ from x_ray_imager_bagriff.response_interpolation import plot
 
 @pytest.fixture
 def response():
-    n_pts = 13
+    n_pts = 15
     centers = np.ones((n_pts, n_pts, 4))
-    position = np.array(np.meshgrid(*[np.linspace(-70, 70, n_pts)]))
+    position = np.moveaxis(
+        np.array(np.meshgrid(*[np.linspace(-70, 70, n_pts)]*2)),
+        0, 2)
     return [centers, position]
 
 

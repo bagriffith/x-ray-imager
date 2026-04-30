@@ -78,7 +78,7 @@ class GridWireframeDiagnostic(GenericResponseDiagnostic):
                     X: NDArray[np.double],  # pylint: disable=invalid-name
                     position: NDArray[np.double],
                     ) -> None:
-        ax.plot_wireframe(position[:, 0], position[:, 1], X, lw=.25, color='k')
+        ax.plot_wireframe(position[:, :, 0], position[:, :, 1], X, lw=.25, color='k')
 
 
 class ColorMeshDiagnostic(GenericResponseDiagnostic):
@@ -105,4 +105,4 @@ class ColorMeshDiagnostic(GenericResponseDiagnostic):
                     X: NDArray[np.double],  # pylint: disable=invalid-name
                     position: NDArray[np.double],
                     ) -> None:
-        ax.pcolormesh(position[:, 0], position[:, 1], X.T, norm=self.norm)
+        ax.pcolormesh(position[:, :, 0], position[:, :, 1], X.T, norm=self.norm)
