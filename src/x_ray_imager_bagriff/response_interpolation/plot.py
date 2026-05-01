@@ -106,3 +106,7 @@ class ColorMeshDiagnostic(GenericResponseDiagnostic):
                     position: NDArray[np.double],
                     ) -> None:
         ax.pcolormesh(position[:, :, 0], position[:, :, 1], X.T, norm=self.norm)
+
+
+diagnostics = {'gridwire': GridWireframeDiagnostic,
+               'colormesh': ColorMeshDiagnostic}

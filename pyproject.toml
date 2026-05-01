@@ -32,3 +32,4 @@ Issues = "https://github.com/bagriffith/x-ray-imager/issues"
 
 [project.scripts]
 identify-lines = "x_ray_imager_bagriff.identify_lines._cli:cli"
+response-interpolation = "x_ray_imager_bagriff.response_interpolation._cli:cli"
