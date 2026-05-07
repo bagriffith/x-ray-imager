@@ -95,8 +95,9 @@ def grid(filename, source, gain, output):
                         max_eps=8,
                         min_cluster_size=500)
 
-    line_cols = [f'{x:.1f} keV T{n}' for n in range(4)
-                 for x in source.energies]
+    line_cols = [f'{x:.1f} keV T{n}'
+                 for x in source.energies
+                 for n in range(4)]
 
     df[line_cols] = df[['csv_path']].apply(
         lambda x: source_identify_all(
