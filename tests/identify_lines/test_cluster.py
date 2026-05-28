@@ -18,22 +18,50 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# import pytest
+import pytest
 import numpy as np
-from x_ray_imager_bagriff.identify_lines import MinDBSCAN
+from x_ray_imager_bagriff.identify_lines import MinDBSCAN, MinOPTICS
+from x_ray_imager_bagriff.identify_lines.plot import FullDiagnostic
+
+# For pytest fixtures without warnings:
+# pylint: disable=redefined-outer-name
 
 
-def test_dbscan_kmeans():
-    n_points = 10_000
+@pytest.fixture
+def example_set():
+    """Create a synthetic set of imager events."""
+    n_points = 2_000
     means = (256, 512)
     np.random.seed(0)  # Keep the set consistent between tests
-    example_set = np.concat(
+    example_set_points = np.concat(
         [np.random.poisson(x, size=(n_points, 4)) for x in means]
     )
-
     correct_labels = np.repeat(np.arange(len(means)), n_points)
+
+    return [example_set_points, correct_labels]
+
+
+def test_dbscan_kmeans(example_set):
+    """Test that MinDBSCAN can find the correct clusters."""
+    data, correct_labels = example_set
+
     cluster = MinDBSCAN(2)
-    identified_cluster = cluster.fit_predict(example_set)
+    cluster.fit(data)
+    identified_cluster = cluster.labels_
+    assert identified_cluster is not None
+    if identified_cluster[0] == 1:
+        # Swap cluster names
+        identified_cluster = np.array([1, 0])[identified_cluster]
+    assert np.all(correct_labels == identified_cluster)
+
+
+def test_optics_kmeans(example_set):
+    """Test that MinOPTICS can find the correct clusters."""
+    data, correct_labels = example_set
+
+    cluster = MinOPTICS(min_clusters=2, min_cluster_size=0.999, max_eps=0.0001)
+    cluster.fit(data)
+    identified_cluster = cluster.labels_
     assert identified_cluster is not None
     if identified_cluster[0] == 1:
         # Swap cluster names

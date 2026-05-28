@@ -18,51 +18,44 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Clustering algorithms used to collect events with the same energy/position.
+"""Clustering algorithms to find events with the same energy/position.
 
-Every algorithms here should be a child of the scikit-learn's `ClusterMixin`.
+DBSCAN and OPTICS return a variable number of clusters, meaning lines with
+similar energies merge into the same group. To accommodate this, a minimum
+number of clusters can be specified. K-Means is then applied to separate
+the lines.
+
+Algorithms here should be a child of the scikit-learn's `ClusterMixin`.
 """
 from typing import Any, Optional
 import logging
-from sklearn.base import ClusterMixin
 from sklearn.cluster import DBSCAN, OPTICS, KMeans
 import numpy as np
-from numpy.typing import ArrayLike
+from numpy.typing import NDArray
 
 logger = logging.getLogger(__name__)
 
 
-class KMeansMin(ClusterMixin):
-    """Mixin for clustering to ensure a min number of clusters with K-Means."""
-    def __init__(self, **kwargs) -> None:
-        self.labels_ = None
+class KMeansMinMixin:
+    """Mixin to guarantee a min number of clusters.
 
-        if not hasattr(self, 'kmeans_kwargs'):
-            self.kmeans_kwargs = None
+    If too few clusters are found, K-means splits all events, other than noise,
+    into the min number of groups.
+    """
+    def __init__(self, min_clusters: int, **kwargs) -> None:
+        self.min_clusters = min_clusters
+        self.kmeans_cluster = KMeans(min_clusters, **kwargs)
 
-        if not hasattr(self, 'min_clusters'):
-            self.min_clusters = 0
-
-        # Default K-Means args
-        kmeans_kwargs = {'n_init': 32}
-
-        if self.kmeans_kwargs is not None:
-            kmeans_kwargs.update(self.kmeans_kwargs)
-
-        self.kmeans_kwargs = kmeans_kwargs
-
-        self.kmeans_cluster = KMeans(self.min_clusters, **self.kmeans_kwargs)
-        super().__init__()
-
-    def fit_predict(self,
-                    X: ArrayLike,  # pylint: disable=invalid-name
-                    y: Any = None):
-        """Apply K-Means as backup."""
-        super().fit_predict(X, y)
-
-        if self.labels_ is None:
-            raise RuntimeError('No labels created.')
-
+    def fit_min(self,
+                X: NDArray[Any],  # pylint: disable=invalid-name
+                y: Any = None):
+        """Check if the min number of clusters is met, and apply K-means if not.
+        
+        This should be called in the subclass after that clustering is
+        completed. For example:
+            super().fit(X, y, **kwargs)
+            self.fit_min(X, y, **kwargs)
+        """
         in_cluster = self.labels_ >= 0
         n_clusters = len(set(self.labels_[in_cluster]))
         logger.info('First clustering found %s clusters.', n_clusters)
@@ -73,6 +66,10 @@ class KMeansMin(ClusterMixin):
             in_cluster = np.full_like(in_cluster, True)
             n_clusters = 1
 
+        if self.kmeans_cluster is None:
+            logger.warning('No kmeans cluster initialized.')
+            return
+
         # Split into enough clusters with KMeans
         if n_clusters < self.min_clusters:
             logger.info('Min of %s clusters requested. Applying K-means.',
@@ -82,42 +79,66 @@ class KMeansMin(ClusterMixin):
                 norm,
                 y if y is None else y[in_cluster])
             self.labels_[in_cluster] = kmeans_fit.labels_
-            n_clusters = self.min_clusters
-
-        return self.labels_
 
 
-class MinDBSCAN(KMeansMin, DBSCAN):
+class MinDBSCAN(KMeansMinMixin, DBSCAN):
+    """DBSCAN with a minimum number of clusters."""
     def __init__(self,
                  min_clusters: int,
                  kmeans_kwargs: Optional[dict] = None,
                  **kwargs
                  ) -> None:
-        """ """
+        """Initialize DBSCAN and set min clusters returned.
+        
+        Args:
+            min_clusters: Minimum number of clusters returned.
+            kmeans_kwargs: Keyword arguments passed to initialize
+                sklearn.cluster.KMeans.
+        """
         if kmeans_kwargs is None:
             kmeans_kwargs = dict()
 
-        self.kmeans_kwargs = kmeans_kwargs
-        self.min_clusters = min_clusters
+        self.kmeans_kwargs = kmeans_kwargs  # Needed for numpy
+        super().__init__(min_clusters, **kmeans_kwargs)
+        super(KMeansMinMixin, self).__init__(**kwargs)
 
-        super().__init__(**kwargs)
+    def fit(self,
+            X: NDArray[Any],  # pylint: disable=invalid-name
+            y: Any = None,
+            sample_weight: Optional[NDArray[Any]] = None
+            ) -> 'MinDBSCAN':
+        """Fit DBSCAN and check if the min number of clusters is met."""
+        super().fit(X, y, sample_weight)
+        self.fit_min(X, y)
+        return self
 
 
-class MinOPTICS(KMeansMin):
+class MinOPTICS(KMeansMinMixin, OPTICS):
+    """OPTICS with a minimum number of clusters."""
     def __init__(self,
                  min_clusters: int,
                  kmeans_kwargs: Optional[dict] = None,
                  **kwargs
                  ) -> None:
-        """ """
+        """Initialize OPTICS and set min clusters returned.
+        
+        Args:
+            min_clusters: Minimum number of clusters returned.
+            kmeans_kwargs: Keyword arguments passed to initialize
+                sklearn.cluster.KMeans.
+        """
         if kmeans_kwargs is None:
             kmeans_kwargs = dict()
 
-        self.kmeans_kwargs = kmeans_kwargs
-        self.min_clusters = min_clusters
-        super().__init__()
-        self.optics = OPTICS(**kwargs)
+        self.kmeans_kwargs = kmeans_kwargs  # Needed for numpy
+        super().__init__(min_clusters, **kmeans_kwargs)
+        super(KMeansMinMixin, self).__init__(**kwargs)
 
-    def fit(self, X, y=None):
-        self.optics.fit(X, y)
-        self.labels_ = self.optics.labels_
+    def fit(self,
+            X: NDArray[Any],  # pylint: disable=invalid-name
+            y: Any = None,
+            **kwargs):
+        """Fit DBSCAN and check if the min number of clusters is met."""
+        super().fit(X, y, **kwargs)
+        self.fit_min(X, y)
+        return self
