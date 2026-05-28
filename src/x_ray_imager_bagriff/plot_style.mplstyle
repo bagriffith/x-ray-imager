@@ -1,3 +1,5 @@
+backend: agg
+
 patch.facecolor: gray
 patch.edgecolor: black
 
@@ -64,7 +66,7 @@ text.latex.preamble : \usepackage{amsmath} \usepackage{amssymb}
 figure.facecolor: 0.75
 figure.edgecolor: white
 
-image.cmap: gray
+image.cmap: plasma
 
 savefig.facecolor: white
 savefig.edgecolor: white

@@ -18,6 +18,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from io import StringIO
+from os import chdir
 from click.testing import CliRunner
 import numpy as np
 import pandas as pd
@@ -31,22 +33,32 @@ from x_ray_imager_bagriff.identify_lines._cli import cli
 
 @pytest.fixture
 def example_events(tmp_path):
+    """Create a CSV file with rows of imager events.
+    
+    Example follows the two energies of Am241 using a gain of 4/keV.
+    """
     n_points = 2_000
-    means = SourceParams.get_source('Am241').energies
+    means = [4.0 * x*np.arange(3, 7) / 18
+             for x in SourceParams.get_source('Am241').energies]
     np.random.seed(0)  # Keep the set consistent between tests
     example_set = np.concat(
-        [np.random.poisson(x*np.repeat([np.arange(3, 7)], n_points, axis=0))
+        [np.random.poisson(np.repeat([x], n_points, axis=0))
          for x in means]
+        + [np.random.randint(0, 256, size=(n_points, 4))]  # Background events
     )
     data_file = tmp_path / 'events.csv'
     np.savetxt(data_file, example_set,
                delimiter=',', fmt='%d',
                header='#T1,T2,T3,T4')
-    return [data_file, means]
+    return [data_file, np.array(means)]
 
 
 @pytest.fixture
 def example_points(example_events, tmp_path):
+    """Create a CSV list of calibrations points with for `example_events`.
+    
+    Only contains a header and one calibration point, set at (-10, 10).
+    """
     data_file, means = example_events
 
     points_csv = tmp_path / 'points.csv'
@@ -58,13 +70,19 @@ def example_points(example_events, tmp_path):
 
 
 def test_identify_point_cli(example_events, tmp_path):
+    """Tests that the cli point command correctly loads."""
     events_csv, means = example_events
     runner = CliRunner()
+    chdir(tmp_path)
     runner.isolated_filesystem(tmp_path)
     result = runner.invoke(cli, ['point', str(events_csv), 'Am241',
-                                 '--gain', '10', '20',
+                                 '--gain', '1.0', '8.0',
                                  '--diagnostic', 'full'])
     assert result.exit_code == 0
+    response = np.loadtxt(StringIO(result.stdout), delimiter=',')
+    assert response.shape == means.shape
+    assert response == pytest.approx(means, 0.1)
+    assert (tmp_path / 'Am241-diagnostic.png').exists()
 
 
 def test_identify_grid_cli(example_points, tmp_path):
@@ -73,7 +91,7 @@ def test_identify_grid_cli(example_points, tmp_path):
     runner.isolated_filesystem(tmp_path)
     out_path = tmp_path / 'out.csv'
     result = runner.invoke(cli, ['grid', str(points_csv), 'Am241',
-                                 '--gain', '10', '20',
+                                 '--gain', '1.0', '8.0',
                                  '--output', str(out_path)])
     print(result.output)
     assert result.exit_code == 0
@@ -81,8 +99,8 @@ def test_identify_grid_cli(example_points, tmp_path):
     assert df['x'].to_numpy() == pytest.approx([-10])
     assert df['y'].to_numpy() == pytest.approx([10])
 
-    for energy, mean in zip(SourceParams.get_source('Am241').energies, means):
-        for tube in range(4):
-            col_name = f'{energy:.1f} keV T{tube}'
-            assert df[col_name].to_numpy() == pytest.approx([mean*(3 + tube)],
-                                                            0.15)
+    result_means = np.array(
+        [[df[f'{energy:.1f} keV T{tube}'][0] for tube in range(4)]
+         for energy in SourceParams.get_source('Am241').energies]
+         )
+    assert result_means == pytest.approx(means, 0.1)

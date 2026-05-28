@@ -72,10 +72,11 @@ def source_identify_all(X: NDArray[np.long],  # pylint: disable=invalid-name
     continuous = X + np.random.uniform(size=np.shape(X))
     in_range = source.get_filter(continuous, gain_range=gain_range)
 
-    cluster_id = cluster_method.fit_predict(continuous[in_range])
+    cluster_method.fit(continuous[in_range])
+    cluster_id = cluster_method.labels_
     if diagnostic is not None:
         diagnostic.plot_diagnostic(X[in_range], cluster_id)
-        diagnostic.savefig(f'{source.name}-diagnostic.png', dpi=300)
+        diagnostic.savefig(f'./{source.name}-diagnostic.png', dpi=300)
 
     centers = find_centers(X[in_range], cluster_id)
     matched_id, gain = match_energy(centers, source.energies, gain_range)

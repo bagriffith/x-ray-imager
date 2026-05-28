@@ -18,7 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Characterize a x-ray imager from calibration data."""
+"""Characterize an X-ray imager using the response to a gamma sources."""
 from ._sources import SourceParams, check_gain_range
 from ._identify import (
     find_centers,

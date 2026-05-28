@@ -102,20 +102,6 @@ class AngerDiagnostic(GenericIdentifyDiagnostic):
         ax.set_xlabel('T1 + T2 - (T3 + T4)')
         ax.set_ylabel('T2 + T3 - (T1 + T4)')
 
-    # @staticmethod
-    # def _anger_metric(points: ArrayLike
-    #                   ) -> tuple[NDArray[np.float64],
-    #                              NDArray[np.float64]]:
-    #     if np.shape(points)[1] != 4:
-    #         raise ValueError('Each event must have four values.')
-
-    #     amplitude = np.sum(points, axis=1)
-    #     amplitude[amplitude < 1] = np.nan
-    #     x = np.dot(points, [1, 1, -1, -1]) / amplitude
-    #     y = np.dot(points, [-1, 1, 1, -1]) / amplitude
-
-    #     return x, y
-
 
 class AmplitudeDiagnostic(GenericIdentifyDiagnostic):
     def _diagnostic(self,

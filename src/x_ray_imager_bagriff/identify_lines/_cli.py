@@ -28,6 +28,7 @@ Needs to
 import csv
 import logging
 import click
+import matplotlib
 import numpy as np
 import pandas as pd
 from sklearn import cluster as skcluster
@@ -39,6 +40,8 @@ from x_ray_imager_bagriff.identify_lines import (
 from x_ray_imager_bagriff.identify_lines.plot import diagnostics
 
 logger = logging.getLogger('x_ray_imager_bagriff.identify_lines')
+
+matplotlib.use('Agg')
 
 # More clustering options could be added from sklearn.cluster
 # TODO: Fix this to handle sources.
@@ -63,21 +66,23 @@ def cli(log_level):
 @click.option('--gain', nargs=2, type=float, default=None)
 @click.option('--diagnostic', type=DiagnosticChoice,
               default=None)
-def point(filename, source, gain, diagnostic):
+@click.option('--output', '-o', type=click.File(mode='w'), default='-')
+def point(filename, source, gain, diagnostic, output):
     events = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.long)
     source = SourceParams.get_source(source)
     if diagnostic is not None:
         diagnostic = diagnostics[diagnostic]()  # Setup figure here.
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        min_samples=250,
-                        max_eps=8,
-                        min_cluster_size=500)
+                        max_eps=10,
+                        cluster_method='dbscan')
 
-    responses = source_identify_all(events, cluster, source,
+    responses = source_identify_all(events, cluster,
+                                    source,
                                     gain_range=gain,
                                     diagnostic=diagnostic)
-    print(responses)
+
+    np.savetxt(output, responses, delimiter=',', fmt='%.6f')
 
 
 @cli.command('grid', short_help='Identify lines at each point in a grid.')
@@ -91,9 +96,8 @@ def grid(filename, source, gain, output):
     source = SourceParams.get_source(source)
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        min_samples=250,
-                        max_eps=8,
-                        min_cluster_size=500)
+                        max_eps=10,
+                        cluster_method='dbscan')
 
     line_cols = [f'{x:.1f} keV T{n}'
                  for x in source.energies
