@@ -18,11 +18,13 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Tests for the identify_lines plotting."""
 import numpy as np
 from x_ray_imager_bagriff.identify_lines import plot
 
 
 def test_full_diagnostic(tmp_path):
+    """Test that events array can be passed to FullDiagnostic and saved."""
     n_points = 1000
     means = (64, 128)
     np.random.seed(0)  # Keep the set consistent between tests

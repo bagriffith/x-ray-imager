@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Tests for the identify_lines CLI."""
 from io import StringIO
 from os import chdir
 from click.testing import CliRunner
@@ -27,7 +28,7 @@ import pytest
 from x_ray_imager_bagriff.identify_lines import SourceParams
 from x_ray_imager_bagriff.identify_lines._cli import cli
 
-# For pytest fixtures
+# For pytest fixtures without warnings:
 # pylint: disable=redefined-outer-name
 
 
@@ -86,6 +87,7 @@ def test_identify_point_cli(example_events, tmp_path):
 
 
 def test_identify_grid_cli(example_points, tmp_path):
+    """Tests that the cli grid loads a listed csv and identifies lines."""
     points_csv, means = example_points
     runner = CliRunner()
     runner.isolated_filesystem(tmp_path)
@@ -99,6 +101,7 @@ def test_identify_grid_cli(example_points, tmp_path):
     assert df['x'].to_numpy() == pytest.approx([-10])
     assert df['y'].to_numpy() == pytest.approx([10])
 
+    # Construct array from columns
     result_means = np.array(
         [[df[f'{energy:.1f} keV T{tube}'][0] for tube in range(4)]
          for energy in SourceParams.get_source('Am241').energies]

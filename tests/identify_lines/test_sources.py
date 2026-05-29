@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Tests for SourceParams."""
 import pytest
 import numpy as np
 from x_ray_imager_bagriff.identify_lines import (

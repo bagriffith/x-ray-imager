@@ -18,10 +18,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Tests for the identify_lines clustering."""
 import pytest
 import numpy as np
 from x_ray_imager_bagriff.identify_lines import MinDBSCAN, MinOPTICS
-from x_ray_imager_bagriff.identify_lines.plot import FullDiagnostic
 
 # For pytest fixtures without warnings:
 # pylint: disable=redefined-outer-name

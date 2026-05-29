@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Tests for the identify_lines line identification."""
 import pytest
 import numpy as np
 from sklearn.base import ClusterMixin
@@ -28,8 +29,12 @@ from x_ray_imager_bagriff.identify_lines import (
 
 
 class MockCluster(ClusterMixin):
-    """Mock scikit-learn clustering where labels are prespecified."""
+    """Mock scikit-learn clustering.
+    
+    Labels are prespecified. Tests that fit() is called once.
+    """
     def __init__(self, cluster_labels) -> None:
+        self.called = False  # To check that fit is called
         self.labels_ = cluster_labels
         super().__init__()
 
@@ -37,6 +42,12 @@ class MockCluster(ClusterMixin):
         """Fit, but do nothing."""
         _ = x
         _ = kwargs
+
+        if self.called:
+            raise RuntimeError('fit() should only be called once')
+
+        self.called = True
+        return self
 
 
 def test_source_identify_all():
@@ -58,6 +69,8 @@ def test_source_identify_all():
 
     for mean, center in zip(means, centers):
         assert center == pytest.approx([mean]*4, 0.05)
+
+    assert mock_cluster.called  # Check that cluster fit() was called once
 
 
 def test_find_centers():
