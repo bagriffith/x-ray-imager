@@ -18,12 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Command Line Interface to identify gamma lines
-
-Needs to
-- Read in a file and identify gamma lines
-- Load a group of files and run all of them
-"""
+"""Command Line Interface to identify gamma lines"""
 
 import csv
 import logging
@@ -31,11 +26,10 @@ import click
 import matplotlib
 import numpy as np
 import pandas as pd
-from sklearn import cluster as skcluster
 from x_ray_imager_bagriff.identify_lines import (
     MinOPTICS,
     SourceParams,
-    source_identify_all
+    find_lines
 )
 from x_ray_imager_bagriff.identify_lines.plot import diagnostics
 
@@ -77,7 +71,7 @@ def point(filename, source, gain, diagnostic, output):
                         max_eps=10,
                         cluster_method='dbscan')
 
-    responses = source_identify_all(events, cluster,
+    responses = find_lines(events, cluster,
                                     source,
                                     gain_range=gain,
                                     diagnostic=diagnostic)
@@ -104,7 +98,7 @@ def grid(filename, source, gain, output):
                  for n in range(4)]
 
     df[line_cols] = df[['csv_path']].apply(
-        lambda x: source_identify_all(
+        lambda x: find_lines(
             np.loadtxt(x['csv_path'],
                        delimiter=',',
                        skiprows=1,

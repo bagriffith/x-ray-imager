@@ -20,16 +20,12 @@
 
 """Characterize an X-ray imager using the response to a gamma sources."""
 from ._sources import SourceParams, check_gain_range
-from ._identify import (
-    find_centers,
-    match_energy,
-    source_identify_all
-)
+from ._identify import line_means, match_energy, find_lines
 from ._cluster import MinDBSCAN, MinOPTICS
 
-__all__ = ['find_centers',
+__all__ = ['line_means',
            'match_energy',
-           'source_identify_all',
+           'find_lines',
            'check_gain_range',
            'SourceParams',
            'MinDBSCAN',

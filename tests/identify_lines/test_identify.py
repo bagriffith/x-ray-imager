@@ -23,7 +23,7 @@ import pytest
 import numpy as np
 from sklearn.base import ClusterMixin
 from x_ray_imager_bagriff.identify_lines import (
-    find_centers, match_energy, source_identify_all,
+    line_means, match_energy, find_lines,
     SourceParams
 )
 
@@ -50,8 +50,8 @@ class MockCluster(ClusterMixin):
         return self
 
 
-def test_source_identify_all():
-    """Test source line identification with preidentified clusters."""
+def test_find_linesl():
+    """Test line identification with preidentified clusters."""
     n_points = 10_000
     means = (256, 512)
     np.random.seed(0)  # Keep the set consistent between tests
@@ -64,7 +64,7 @@ def test_source_identify_all():
 
     source = SourceParams(means)
 
-    centers = source_identify_all(example_set, mock_cluster,
+    centers = find_lines(example_set, mock_cluster,
                                   source, gain_range=(1, 8))
 
     for mean, center in zip(means, centers):
@@ -73,15 +73,15 @@ def test_source_identify_all():
     assert mock_cluster.called  # Check that cluster fit() was called once
 
 
-def test_find_centers():
-    """Tests `find_centers()` for a Poisson distribution."""
+def test_line_means():
+    """Tests line_means() for a Poisson distribution."""
     n_points = 10_000
     mean = 256
     np.random.seed(0)  # Keep the set consistent between tests
     example_set = np.random.poisson(mean, size=(n_points, 4))
     example_labels = np.zeros(n_points, dtype=int)
 
-    centers = find_centers(example_set, example_labels)
+    centers = line_means(example_set, example_labels)
 
     assert centers == pytest.approx(np.full((1, 4), mean), 0.05)
 
@@ -91,7 +91,6 @@ def test_match_energy():
     example_centers = np.transpose([np.arange(100., 1000., 100.)]*4)
     example_energies = np.array([30., 80.])
 
-    idx, g = match_energy(example_centers, example_energies, (20, 80))
+    idx = match_energy(example_centers, example_energies, (20, 80))
 
     assert np.all(idx == [2, 7])
-    assert g == pytest.approx(40.)
