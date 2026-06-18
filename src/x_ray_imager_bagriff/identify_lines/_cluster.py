@@ -43,6 +43,14 @@ class KMeansMinMixin:
     into the min number of groups.
     """
     def __init__(self, min_clusters: int, **kwargs) -> None:
+        """Initialize the k-means clustering object.
+        
+        Args:
+            min_clusters: Minimum number of clusters returned. Sets the
+                threshold to apply k-means.
+            **kwargs: Passed to the KMeans constructor.
+                See sklearn.cluster.KMeans for more details.
+        """
         self.min_clusters = min_clusters
         self.kmeans_cluster = KMeans(min_clusters, **kwargs)
 
@@ -55,6 +63,11 @@ class KMeansMinMixin:
         completed. For example:
             super().fit(X, y, **kwargs)
             self.fit_min(X, y, **kwargs)
+        
+        Args:
+            X: The data to cluster. Shape should be (n_samples, n_features).
+            y: Passed to the clustering fit(), but not used. Kept for
+                consistency with Scikit-learn's clustering algorithms.
         """
         in_cluster = self.labels_ >= 0
         n_clusters = len(set(self.labels_[in_cluster]))
@@ -91,9 +104,12 @@ class MinDBSCAN(KMeansMinMixin, DBSCAN):
         """Initialize DBSCAN and set min clusters returned.
         
         Args:
-            min_clusters: Minimum number of clusters returned.
-            kmeans_kwargs: Keyword arguments passed to initialize
-                sklearn.cluster.KMeans.
+            min_clusters: Minimum number of clusters returned, passed to
+                the KMeansMinMixin.
+            kmeans_kwargs: Keyword arguments passed to KMeansMinMixin to
+                the sklearn.cluster.KMeans constructor.
+            **kwargs: Passed to the DBSCAN constructor.
+                See sklearn.cluster.DBSCAN for more details.
         """
         if kmeans_kwargs is None:
             kmeans_kwargs = dict()
@@ -107,7 +123,15 @@ class MinDBSCAN(KMeansMinMixin, DBSCAN):
             y: Any = None,
             sample_weight: Optional[NDArray[Any]] = None
             ) -> 'MinDBSCAN':
-        """Fit DBSCAN and check if the min number of clusters is met."""
+        """Fit DBSCAN and check if the min number of clusters is met.
+        
+        Args:
+            X: The data to cluster. Shape should be (n_samples, n_features).
+            y: Passed to the clustering fit(), but not used. Kept for
+                consistency with Scikit-learn's clustering algorithms.
+            sample_weight: Passed to the clustering fit(), but not used. Kept
+                for consistency with Scikit-learn's clustering algorithms.
+        """
         super().fit(X, y, sample_weight)
         self.fit_min(X, y)
         return self
@@ -123,9 +147,12 @@ class MinOPTICS(KMeansMinMixin, OPTICS):
         """Initialize OPTICS and set min clusters returned.
         
         Args:
-            min_clusters: Minimum number of clusters returned.
-            kmeans_kwargs: Keyword arguments passed to initialize
-                sklearn.cluster.KMeans.
+            min_clusters: Minimum number of clusters returned, passed to
+                the KMeansMinMixin.
+            kmeans_kwargs: Keyword arguments passed to KMeansMinMixin to
+                the sklearn.cluster.KMeans constructor.
+            **kwargs: Passed to the OPTICS constructor.
+                See sklearn.cluster.OPTICS for more details.
         """
         if kmeans_kwargs is None:
             kmeans_kwargs = dict()
@@ -138,7 +165,15 @@ class MinOPTICS(KMeansMinMixin, OPTICS):
             X: NDArray[Any],  # pylint: disable=invalid-name
             y: Any = None,
             **kwargs):
-        """Fit DBSCAN and check if the min number of clusters is met."""
+        """Fit OPTICS and check if the min number of clusters is met.
+        
+        Args:
+            X: The data to cluster. Shape should be (n_samples, n_features).
+            y: Passed to the clustering fit(), but not used. Kept for
+                consistency with Scikit-learn's clustering algorithms.
+            sample_weight: Passed to the clustering fit(), but not used. Kept
+                for consistency with Scikit-learn's clustering algorithms.
+        """
         super().fit(X, y, **kwargs)
         self.fit_min(X, y)
         return self
