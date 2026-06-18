@@ -104,17 +104,8 @@ class GenericIdentifyDiagnostic(Figure):
 
 class AngerDiagnostic(GenericIdentifyDiagnostic):
     """Scatter plot of events by Anger imager position, colored by id.
-
-    Uses the simple x-ray imager positioning algorithm for an Anger imager,
-    x = sum(detectors_plus_x) - sum(detectors_minus_x)
-    y = sum(detectors_plus_y) - sum(detectors_minus_y)
-    an then normalized by the sum of all detectore
     
-    It is assumed here that the detectors are numbered
-            +y
-        (2) | (1)
-        ----+----+x
-        (3) | (0)
+    For details, see position_estimation._anger.anger().
     """
     def _diagnostic(self,
                     X: ArrayLike,  # pylint: disable=invalid-name

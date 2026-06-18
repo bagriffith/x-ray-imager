@@ -17,22 +17,55 @@
 # LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
+import logging
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 from x_ray_imager_bagriff.position_estimation import PointEstimator
 
+logger = logging.getLogger(__name__)
 
-def anger_basis(points):
-    # TODO Test shape
-    amplitude = np.sum(points, axis=1, dtype=np.float64)
-    amplitude[amplitude < 1.] = np.nan
 
-    x = np.dot(points, [1, 1, -1, -1]) / amplitude
-    y = np.dot(points, [-1, 1, 1, -1]) / amplitude
+def anger_basis(X: ArrayLike  # pylint: disable=invalid-name
+                ) -> tuple[NDArray[np.double],
+                           NDArray[np.double],
+                           NDArray[np.double]]:
+    """Simple Anger imager positioning algorithm.
+
+    x = sum(detectors_plus_x) - sum(detectors_minus_x)
+    y = sum(detectors_plus_y) - sum(detectors_minus_y)
+    an then normalized by the sum of all detectore
+    
+    It is assumed here that the detectors are numbered
+            +y
+        (2) | (1)
+        ----+---- +x
+        (3) | (0)
+    
+    Args:
+        X: Array of measurements. Shape is (n events, n detectors).
+
+    Returns:
+        Tuple of three arrays. The amplitude, sum of all detectors.
+        The Anger x position. The Anger y position.
+    """
+    n_detectors = np.shape(X)[1]
+    if n_detectors != 4:
+        # Project specific warning. Other imagers may need this removed.
+        logger.warning('Expected 4 detectors, but got %s', n_detectors)
+
+    amplitude = np.sum(X, axis=1, dtype=np.float64)
+
+    # Exclude null events where the amplitudes are all zero.
+    amplitude = np.where(amplitude < 1., amplitude, np.nan)
+
+    x = np.dot(X, [1, 1, -1, -1]) / amplitude
+    y = np.dot(X, [-1, 1, 1, -1]) / amplitude
 
     return amplitude, x, y
 
 
 class AngerSimple(PointEstimator):
+    """Anger algorithm based PointEstimator."""
     short_name = 'anger'
 
     def __init__(self, channels, energies, positions):
