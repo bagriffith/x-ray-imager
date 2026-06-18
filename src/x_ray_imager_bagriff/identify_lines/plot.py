@@ -18,7 +18,15 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-"""Creates diagnostic plots for the line identification."""
+"""Creates diagnostic plots for visualizing imager event groupings.
+
+Typical usage example:
+    data = np.loadtxt("imager-event-list.txt")
+    group_ids = cluster_method.fit(data)
+    diagnostic = FullDiagnostic()
+    diagnostic.plot_diagnostic(data, group_ids)
+    diagnostic.savefig('diagnostic.png')
+"""
 from typing import Optional
 from importlib import resources
 from cycler import cycler
@@ -36,9 +44,23 @@ STYLE_FILE = str(resources.files(x_ray_imager_bagriff)
 
 
 class GenericIdentifyDiagnostic(Figure):
+    """Generic figure for visualizing imager event groupings.
+    
+    A list of events and optionally, their group ID should be passed to
+    plot_diagnostic(). This diagnostic can then be saved or displayed like
+    any other pyplot figure. The specific diagnostic should be implemented
+    as a subclass.
+    """
     def __init__(self, *args,
                  rc_params: Optional[dict] = None,
                  **kwargs) -> None:
+        """Initialize the diagnostic figure.
+
+        Args:
+            rc_params: A dictionary of matplotlib rc_params to use for this
+                figure. If not provided, there is default style in this
+                package. It's linked here by the variable STYLE_FILE.
+        """
         self.rc_params = mpl.rc_params_from_file(STYLE_FILE,
                                                  fail_on_error=True)
         if rc_params is not None:
@@ -50,48 +72,84 @@ class GenericIdentifyDiagnostic(Figure):
         super().__init__(*args, **kwargs)
 
     def plot_diagnostic(self,
-                        points: ArrayLike,
+                        X: ArrayLike,  # pylint: disable=invalid-name
                         labels: Optional[NDArray[np.long]] = None
                         ) -> None:
+        """Visualize the events and classifications.
+
+        This calls _diagnostic which should be overloaded with the specific
+        diagnostic.
+
+        Args:
+            X: Array of measurements. Shape is (n events, n detectors).
+                See _identify.find_lines() for specifics.
+            labels: Integer index of cluster identified for each measurement.
+        """
         with plt.rc_context(self.rc_params):
-            self._diagnostic(points, labels)
+            self._diagnostic(X, labels)
 
     def _diagnostic(self,
-                    points: ArrayLike,
+                    X: ArrayLike,  # pylint: disable=invalid-name
                     labels: Optional[NDArray[np.long]] = None
                     ) -> None:
-        pass
+        """Diagnostic implementation, to be overloaded.
+        
+        Args:
+            points:
+            labels:
+        """
+        _ = X
+        _ = labels
 
 
 class AngerDiagnostic(GenericIdentifyDiagnostic):
+    """Scatter plot of events by Anger imager position, colored by id.
+
+    Uses the simple x-ray imager positioning algorithm for an Anger imager,
+    x = sum(detectors_plus_x) - sum(detectors_minus_x)
+    y = sum(detectors_plus_y) - sum(detectors_minus_y)
+    an then normalized by the sum of all detectore
+    
+    It is assumed here that the detectors are numbered
+            +y
+        (2) | (1)
+        ----+----+x
+        (3) | (0)
+    """
     def _diagnostic(self,
-                    points: ArrayLike,
+                    X: ArrayLike,  # pylint: disable=invalid-name
                     labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         ax = self.subplots()
-        self.anger(ax, points, labels)
+        self.anger(ax, X, labels)
 
     def anger(self,
               ax: Axes,
-              points: ArrayLike,
+              X: ArrayLike,  # pylint: disable=invalid-name
               labels: Optional[NDArray[np.long]] = None,
               limit_points: Optional[int] = 1000
               ) -> None:
+        """Plot the anger diagnostic on the Axis provided.
         
-        points = np.array(points, dtype=np.float64)
+        Args:
+            ax: Axis to use for the scatter plot.
+            X: Array of measurements. Shape is (n events, n detectors).
+            labels: Integer index of cluster identified for each measurement.
+        """
+        X = np.array(X, dtype=np.float64)
 
         if labels is None:
-            labels = np.ones(np.shape(points)[0], dtype=np.long)
+            labels = np.ones(np.shape(X)[0], dtype=np.long)
 
         labels_used = sorted(set(labels))  # type: ignore
 
-        to_plot = np.random.choice(np.shape(points)[0],
+        to_plot = np.random.choice(np.shape(X)[0],
                                    limit_points,
                                    replace=False)
-        points = np.array(points, dtype=np.float64)[to_plot, :]
+        X = np.array(X, dtype=np.float64)[to_plot, :]
         labels = np.array(labels, dtype=np.long)[to_plot]
 
-        _, x, y = anger_basis(points)
+        _, x, y = anger_basis(X)
 
         for i in labels_used:
             ax.scatter(x[labels == i], y[labels == i], marker='o', s=0.25)
@@ -104,25 +162,34 @@ class AngerDiagnostic(GenericIdentifyDiagnostic):
 
 
 class AmplitudeDiagnostic(GenericIdentifyDiagnostic):
+    """Histogram of the sum of all detectors for each event, colored by id.
+    """
     def _diagnostic(self,
-                    points: ArrayLike,
+                    X: ArrayLike,  # pylint: disable=invalid-name
                     labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         ax = self.subplots()
-        self.amplitude_hist(ax, points, labels)
+        self.amplitude_hist(ax, X, labels)
 
     def amplitude_hist(self,
                        ax: Axes,
-                       points: ArrayLike,
+                       X: ArrayLike,  # pylint: disable=invalid-name
                        labels: Optional[NDArray[np.long]] = None
                        ) -> None:
-        points = np.array(points, dtype=np.float64)
+        """Plot the event amplitude histogram on the Axis provided.
+        
+        Args:
+            ax: Axis to use for the scatter plot.
+            X: Array of measurements. Shape is (n events, n detectors).
+            labels: Integer index of cluster identified for each measurement.
+        """
+        X = np.array(X, dtype=np.float64)
 
         if labels is None:
-            labels = np.ones(np.shape(points)[0], dtype=np.long)
+            labels = np.ones(np.shape(X)[0], dtype=np.long)
 
         labels_used = sorted(set(labels))  # type: ignore
-        amplitude = np.sum(points, axis=1)
+        amplitude = np.sum(X, axis=1)
 
         bins = list(np.arange(0., 1024., 2.))
         ax.hist([amplitude[labels == i] for i in labels_used],
@@ -130,13 +197,14 @@ class AmplitudeDiagnostic(GenericIdentifyDiagnostic):
 
 
 class FullDiagnostic(AngerDiagnostic, AmplitudeDiagnostic):
+    """Combine the Anger and Amplitude diagnostics in one figure."""
     def _diagnostic(self,
-                    points: ArrayLike,
+                    X: ArrayLike,  # pylint: disable=invalid-name
                     labels: Optional[NDArray[np.long]] = None
                     ) -> None:
         ax_hist, ax_anger = self.subplots(2)
-        self.amplitude_hist(ax_hist, points, labels)
-        self.anger(ax_anger, points, labels)
+        self.amplitude_hist(ax_hist, X, labels)
+        self.anger(ax_anger, X, labels)
 
 
 diagnostics = {'anger': AngerDiagnostic,
