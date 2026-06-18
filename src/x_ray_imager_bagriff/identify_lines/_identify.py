@@ -26,7 +26,9 @@ Typical usage example:
     cluster_method = sklearn.cluster.KMeans()  # Or some other algorithm
     source = SourceParams.get_source('Am241')
 
-    responses = source_identify_all(data, cluster_method, source, (1.0, 4.0))
+    responses = find_lines(data, cluster_method, source, (1.0, 4.0))
+    for i in range(responses.shape[0]):
+        print(f"Line {i}: {responses[i,:]}")
 """
 import logging
 from typing import Optional
