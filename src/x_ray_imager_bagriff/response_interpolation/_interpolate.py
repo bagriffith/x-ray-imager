@@ -20,75 +20,198 @@
 
 """Interpolate between calibration source positions and energies."""
 import logging
+from typing import Optional
 from scipy.interpolate import RegularGridInterpolator, make_interp_spline
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 import xraydb
 from x_ray_imager_bagriff.response_interpolation import pca
+from x_ray_imager_bagriff.response_interpolation.plot import (
+    GenericResponseDiagnostic)
+
+logger = logging.getLogger(__name__)
 
 
 class Interpolation:
-    def __init__(self, energy, positions, centers,
-                 input_diagnostic=None, error_diagnostic=None):
-        logging.debug('Centers shape: %s', centers.shape)
+    """Generic base to interpolate x-ray detector response and validate it.
+
+    This is intended to produce the best estimate of what the mean response
+    from the imager would be for a given x-ray position and energy. Specific
+    implementation is left for inherited classes.
+    """
+    def __init__(self,
+                 energies: ArrayLike,
+                 positions: ArrayLike,
+                 responses: ArrayLike,
+                 input_diagnostic: Optional[GenericResponseDiagnostic] = None,
+                 output_diagnostic: Optional[GenericResponseDiagnostic] = None,
+                 error_diagnostic: Optional[GenericResponseDiagnostic] = None
+                 ) -> None:
+        """Initialize the interpolation.
+
+        Args:
+            energy: Array of energies used for the calibration points.
+                Shape is (n_energies).
+            positions: Array of the x and y position for each calibration
+                point. It's expected that the same points are used for each
+                energy. Shape should be (2, n_x_positions, n_y_positions)
+            responses: Array of expected response for each x-ray energy and
+                position used in calibration. Shape should be
+                (n_energies, n_x_positions, n_y_positions, n_detectors)
+            input_diagnostic: Diagnostic plot of the calibration responses.
+            output_diagnostic: Diagnostic plot to use for the predicted output
+                at each calibration point and the specified energy.
+            error_diagnostic: Diagnostic plot of the difference between
+                responses from calibration and the prediction.
+        """
+        self._check_shape(energies, positions, responses)
+        energies = np.array(energies, dtype=np.double)
+        positions = np.array(positions, dtype=np.double)
+        responses = np.array(responses, dtype=np.double)
+
         if input_diagnostic is not None:
-            for i, e in enumerate(energy):
-                input_diagnostic.plot_diagnostic(centers[i], positions)
-                input_diagnostic.savefig(f'in-{e:.1f}keV.png', dpi=300)
+            for response, energy in zip(responses, energies):
+                input_diagnostic.plot_diagnostic(response, positions)
+                input_diagnostic.savefig(f'in-{energy:.1f}keV.png', dpi=300)
 
         max_error = 0.
         mean_error = 0.
 
-        for i, e in enumerate(energy):
+        for response, energy in zip(responses, energies):
+            # For each energy calibration, check how accurately it's reproduced
             max_error_e, mean_error_e = \
-                self.validate(e, positions, centers[:, :, :, i],
-                              error_diagnostic)
+                self.validate(energy, positions, response,
+                              error_diagnostic=error_diagnostic,
+                              output_diagnostic=output_diagnostic)
             max_error = max(max_error, max_error_e)
-            mean_error += mean_error_e/len(energy)
-
-        logging.info('Interpolation Statistics:')
-        logging.info('\tMean Error: %.2f', mean_error)
-        logging.info('\tMax Error: %.2f', max_error)
+            mean_error += mean_error_e/len(energies)
 
     def __call__(self, *args, **kwargs):
         return self.values(*args, **kwargs)
 
-    def values(self, energy, x, y):
-        return
+    def values(self,
+               energy: ArrayLike,
+               x: ArrayLike,
+               y: ArrayLike
+               ) -> NDArray[np.double]:
+        """Estimate the response for an energy and position.
 
-    def validate(self, energy, positions, centers,
-                 output_diagnostic=None, error_diagnostic=None):
+        Implementation is left for the specific subclass. It should be able
+        to tolarate any array shape, provided it's the same for all three
+        variables.
+
+        Args:
+            energy: Array of energies for each response to predict.
+            x: Array of x position coordinate for each response to predict.
+            y: Array of y position coordinate for each response to predict.
+        """
+        _ = energy, x, y
+        raise NotImplementedError()
+
+    def validate(self,
+                 energy: float,
+                 positions: NDArray[np.double],
+                 responses: NDArray[np.double],
+                 output_diagnostic: Optional[GenericResponseDiagnostic] = None,
+                 error_diagnostic: Optional[GenericResponseDiagnostic] = None
+                 ) -> tuple[float, float]:
+        """Check the predictions against calibration and plot diagnostics.
+
+        Args:
+            energy: Energy of the calibration source.
+            positions: Array of calibration points.
+            responses: Array of detector outputs for each calibration point.
+            output_diagnostic: Diagnostic plot to use for the predicted output
+                at each calibration point and the specified energy.
+            error_diagnostic: Diagnostic plot of the difference between
+                responses from calibration and the prediction.
+        Returns:
+            Tuple of the maximum and mean error between the calibration
+            responses and the predicted output for the same energies and
+            positions.
+        """
         interp_centers = np.empty((*positions.shape[1:], 4))
         for idx in np.ndindex(positions.shape[1:]):
             interp_centers[idx] = self([energy], [positions[0, :, :][idx]],
                                        [positions[1, :, :][idx]])
 
-        errors = interp_centers - centers
+        errors = interp_centers - responses
 
         x_hr = np.linspace(np.min(positions[0, :, :]),
                            np.max(positions[0, :, :]), 70)
         y_hr = np.linspace(np.min(positions[1, :, :]),
                            np.max(positions[1, :, :]), 70)
 
-        X, Y = np.meshgrid(x_hr, y_hr)
-        Z = np.empty((*X.shape, 4))
-        for idx in np.ndindex(X.shape):
-            Z[idx] = self([energy], [X[idx]], [Y[idx]])
+        x_mesh, y_mesh = np.meshgrid(x_hr, y_hr)
+        z_mesh = np.empty((*x_mesh.shape, 4))
+        for idx in np.ndindex(x_mesh.shape):
+            z_mesh[idx] = self([energy], [x_mesh[idx]], [y_mesh[idx]])
 
         if output_diagnostic is not None:
-            for i, e in enumerate(energy):
-                output_diagnostic.plot_diagnostic(Z[i], [X, Y])
-                output_diagnostic.savefig(f'out-{e:.1f}keV.png', dpi=300)
+            output_diagnostic.plot_diagnostic(z_mesh,
+                                              np.array([x_mesh, y_mesh]))
+            output_diagnostic.savefig(f'out-{energy:.1f}keV.png', dpi=300)
 
         if error_diagnostic is not None:
-            for i, e in enumerate(energy):
-                error_diagnostic.plot_diagnostic(errors, positions)
-                error_diagnostic.savefig(f'error-{e:.1f}keV.png', dpi=300)
+            error_diagnostic.plot_diagnostic(errors, positions)
+            error_diagnostic.savefig(f'error-{energy:.1f}keV.png', dpi=300)
 
-        return np.max(np.abs(errors)), np.mean(np.abs(errors))
+        max_error = np.max(np.abs(errors))
+        mean_error = float(np.mean(np.abs(errors)))
+
+        logger.info('Interpolation Statistics for %.1f keV:', energy)
+        logger.info('  Mean Error: %.2f', mean_error)
+        logger.info('  Max Error: %.2f', max_error)
+        if mean_error > 4.0:
+            # Somewhat arbitrary threshold. An error < 1.0 should be harmless.
+            logger.warning('Mean error for %s keV is high: %.2f',
+                           energy, mean_error)
+
+        return max_error, mean_error
+
+    @staticmethod
+    def _check_shape(energy: ArrayLike,
+                     positions: ArrayLike,
+                     responses: ArrayLike):
+        """Check the shapes of the input arrays.
+
+        Args:
+            See __init__().
+
+        Raises:
+            ValueError: Shapes of the three arrays do not agree.
+        """
+        energy_shape = np.shape(energy)
+        logger.debug('%s init - energy shape: %s',
+                     __class__, energy_shape)
+        positions_shape = np.shape(positions)
+        logger.debug('%s init - positions shape: %s',
+                     __class__, positions_shape)
+        responses_shape = np.shape(responses)
+        logger.debug('%s init - responses shape: %s',
+                     __class__, responses_shape)
+
+        if len(energy_shape) != 1:
+            raise ValueError(f'energy array is the wrong shape {energy_shape}')
+
+        if len(positions_shape) != 3 or positions_shape[0] != 2:
+            raise ValueError('positions array is the wrong shape '
+                             f'{positions_shape}')
+
+        if (len(responses_shape) != 4
+            or
+            responses_shape[:3] != (energy_shape[0], *positions_shape[1:])):
+            raise ValueError('responses array is the wrong shape '
+                             f'{responses_shape}')
+
+        if responses_shape[3] != 4:
+            # Project specific warning. Other imagers may need this removed.
+            logger.warning('Expected 4 detectors, but got %s',
+                           responses_shape[3])
 
 
 class CubicInterpolation(Interpolation):
-    def __init__(self, energies, positions, centers):
+    def __init__(self, energies, positions, centers, **kwargs):
         ind = np.argsort(energies)
         energies = np.array(energies)[ind]
         centers = centers[ind, :, :, :]
@@ -102,6 +225,7 @@ class CubicInterpolation(Interpolation):
             RegularGridInterpolator([energies, x, y], centers,
                                     method='cubic',
                                     bounds_error=False)
+        super().__init__(energies, positions, centers, **kwargs)
 
     def values(self, energy, x, y):
         return self.grid_interp((energy, x, y))
