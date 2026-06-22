@@ -106,7 +106,8 @@ class Interpolation:
             y: Array of y position coordinate for each response to predict.
         """
         _ = energy, x, y
-        raise NotImplementedError()
+        logger.warning('Base class is used with no interpolation method.')
+        return np.full_like(energy, np.nan)
 
     def validate(self,
                  energy: float,
@@ -130,10 +131,9 @@ class Interpolation:
             responses and the predicted output for the same energies and
             positions.
         """
-        interp_centers = np.empty((*positions.shape[1:], 4))
-        for idx in np.ndindex(positions.shape[1:]):
-            interp_centers[idx] = self([energy], [positions[0, :, :][idx]],
-                                       [positions[1, :, :][idx]])
+        interp_centers = self(np.full(positions.shape[1:], energy),
+                              positions[0, :, :],
+                              positions[1, :, :])
 
         errors = interp_centers - responses
 
@@ -142,13 +142,13 @@ class Interpolation:
         y_hr = np.linspace(np.min(positions[1, :, :]),
                            np.max(positions[1, :, :]), 70)
 
-        x_mesh, y_mesh = np.meshgrid(x_hr, y_hr)
-        z_mesh = np.empty((*x_mesh.shape, 4))
-        for idx in np.ndindex(x_mesh.shape):
-            z_mesh[idx] = self([energy], [x_mesh[idx]], [y_mesh[idx]])
-
         if output_diagnostic is not None:
+            x_mesh, y_mesh = np.meshgrid(x_hr, y_hr)
+            e_mesh = np.full_like(x_mesh, energy)
+            z_mesh = self(e_mesh, x_mesh, y_mesh)
             output_diagnostic.plot_diagnostic(z_mesh,
+                                              
+                                              
                                               np.array([x_mesh, y_mesh]))
             output_diagnostic.savefig(f'out-{energy:.1f}keV.png', dpi=300)
 
