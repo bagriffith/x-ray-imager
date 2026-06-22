@@ -18,6 +18,11 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Tests the Interpolation diagnostic plots.
+
+Does not test the outout, just that a file is saved without errors.
+"""
+import logging
 import numpy as np
 import pytest
 from x_ray_imager_bagriff.response_interpolation import plot
@@ -28,25 +33,30 @@ from x_ray_imager_bagriff.response_interpolation import plot
 
 @pytest.fixture
 def response():
+    """Create example responses to plot."""
     n_pts = 15
-    centers = np.ones((n_pts, n_pts, 4))
-    position = np.moveaxis(
-        np.array(np.meshgrid(*[np.linspace(-70, 70, n_pts)]*2)),
-        0, 2)
+    position = np.array(np.meshgrid(np.linspace(-70, 70, n_pts),
+                                    np.linspace(-70, 70, n_pts+1),
+                                    indexing='ij'))
+    centers = np.repeat(np.expand_dims(position[0], 2), 4, axis=2)
     return [centers, position]
 
 
 def test_wireframe(tmp_path, response):
+    """Test GridWireframeDiagnostic diagnostic plot."""
     diagnostic = plot.GridWireframeDiagnostic()
     diagnostic.plot_diagnostic(*response)
     plot_path = tmp_path / 'diagnostic.pdf'
+    logging.info("GridWireframeDiagnostic test output path: %s", plot_path)
     diagnostic.savefig(plot_path)
     assert plot_path.exists()
 
 
 def test_colormesh(tmp_path, response):
-    diagnostic = plot.GridWireframeDiagnostic()
+    """Test ColorMeshDiagnostic diagnostic plot."""
+    diagnostic = plot.ColorMeshDiagnostic()
     diagnostic.plot_diagnostic(*response)
     plot_path = tmp_path / 'diagnostic.pdf'
+    logging.info("ColorMeshDiagnostic test output path: %s", plot_path)
     diagnostic.savefig(plot_path)
     assert plot_path.exists()
