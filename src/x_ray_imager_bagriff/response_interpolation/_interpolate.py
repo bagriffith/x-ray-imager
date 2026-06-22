@@ -147,8 +147,6 @@ class Interpolation:
             e_mesh = np.full_like(x_mesh, energy)
             z_mesh = self(e_mesh, x_mesh, y_mesh)
             output_diagnostic.plot_diagnostic(z_mesh,
-                                              
-                                              
                                               np.array([x_mesh, y_mesh]))
             output_diagnostic.savefig(f'out-{energy:.1f}keV.png', dpi=300)
 
