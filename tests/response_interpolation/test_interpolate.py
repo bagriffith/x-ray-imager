@@ -143,9 +143,12 @@ def test_interpolation_init():
     responses = np.zeros((2, 2, 2, 4))
 
     with (mock.patch.object(Interpolation, '_check_shape') as mock_check_shape,
-          mock.patch.object(Interpolation, 'validate') as mock_validate):
+          mock.patch.object(Interpolation, 'validate',
+                            return_value=(0., 0.)) as mock_validate):
         Interpolation(energies, positions, responses)
-        mock_check_shape.assert_called_once_with(energies, positions, responses)
+        mock_check_shape.assert_called_once_with(energies,
+                                                 positions,
+                                                 responses)
         assert mock_validate.call_count == len(energies)
 
 
