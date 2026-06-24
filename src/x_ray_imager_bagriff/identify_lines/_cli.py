@@ -58,7 +58,9 @@ def load_measurement_csv(filename):
     column should be a detector in order. Values are expected to be integers
     that fit in a 32 bit signed int.
     """
-    return np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.long)
+    response = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.long)
+    # subset = np.random.choice(response.shape[0], 20_000, replace=False)
+    return response
 
 
 @click.group()
@@ -101,7 +103,8 @@ def single(filename, source, gain, diagnostic, output):
     #   modifying this function. Frequently adjusting these settings would
     #   indicate that I should add an option for it.
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=10,
+                        max_eps=0.75 * np.max(source.energies) \
+                                * events.shape[0]**(-0.333),
                         cluster_method='dbscan')
 
     responses = find_lines(events,
@@ -154,8 +157,11 @@ def multiple(filename, source, gain, output, bar):
     df = pd.read_csv(filename)
     source = SourceParams.get_source(source)
 
+    n_pts = load_measurement_csv(df['csv_path'][0]).shape[0]
+
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=10,
+                        max_eps=0.75 * np.max(source.energies) \
+                                * n_pts**(-0.333),
                         cluster_method='dbscan')
 
     n_detectors = 4  # This could be added as an option if needed.
@@ -168,9 +174,9 @@ def multiple(filename, source, gain, output, bar):
         tqdm.pandas()
         df[line_cols] = df[['csv_path']].progress_apply(
             lambda x: find_lines(load_measurement_csv(x['csv_path']),
-                                cluster,
-                                source,
-                                gain_range=gain).flatten(),
+                                 cluster,
+                                 source,
+                                 gain_range=gain).flatten(),
             axis=1,
             result_type="expand")
     else:
