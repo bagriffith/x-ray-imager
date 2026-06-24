@@ -72,7 +72,7 @@ def find_lines(X: NDArray[np.long],  # pylint: disable=invalid-name
 
     Returns:
         Array of mean detector responses. Shape is
-        (n detectors, n gamma lines)
+        (n_lines, n_detectors)
     """
     if gain_range is not None:
         gain_range = check_gain_range(gain_range=gain_range)

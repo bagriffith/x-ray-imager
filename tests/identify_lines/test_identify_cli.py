@@ -20,12 +20,14 @@
 
 """Tests for the identify_lines CLI."""
 from io import StringIO
+from unittest import mock
 from os import chdir
 from click.testing import CliRunner
 import numpy as np
 import pandas as pd
 import pytest
 from x_ray_imager_bagriff.identify_lines import SourceParams
+from x_ray_imager_bagriff.identify_lines.plot import FullDiagnostic
 from x_ray_imager_bagriff.identify_lines._cli import cli
 
 # For pytest fixtures without warnings:
@@ -39,8 +41,8 @@ def example_events(tmp_path):
     Example follows the two energies of Am241 using a gain of 4/keV.
     """
     n_points = 2_000
-    means = [4.0 * x*np.arange(3, 7) / 18
-             for x in SourceParams.get_source('Am241').energies]
+    source = SourceParams.get_source('Am241')
+    means = np.array([4.0 * x*np.arange(3, 7) / 18 for x in source.energies])
     np.random.seed(0)  # Keep the set consistent between tests
     example_set = np.concat(
         [np.random.poisson(np.repeat([x], n_points, axis=0))
@@ -50,8 +52,9 @@ def example_events(tmp_path):
     data_file = tmp_path / 'events.csv'
     np.savetxt(data_file, example_set,
                delimiter=',', fmt='%d',
-               header='#T1,T2,T3,T4')
-    return [data_file, np.array(means)]
+               header='#d1,d2,d3,d4')
+
+    return [data_file, means, source]
 
 
 @pytest.fixture
@@ -60,41 +63,50 @@ def example_points(example_events, tmp_path):
     
     Only contains a header and one calibration point, set at (-10, 10).
     """
-    data_file, means = example_events
+    data_file, means, source = example_events
 
     points_csv = tmp_path / 'points.csv'
     with open(points_csv, 'w', encoding='utf-8') as f:
         f.write('"x","y","csv_path"\n'
                 f'-10.0,10.0,"{data_file}"')
 
-    return [points_csv, means]
+    return [points_csv, means, source]
 
 
-def test_identify_point_cli(example_events, tmp_path):
-    """Tests that the cli point command correctly loads."""
-    events_csv, means = example_events
+def test_identify_single_cli(example_events, tmp_path):
+    """Tests that the cli single command correctly loads."""
+    events_csv, means, source = example_events
     runner = CliRunner()
     chdir(tmp_path)
     runner.isolated_filesystem(tmp_path)
-    result = runner.invoke(cli, ['point', str(events_csv), 'Am241',
-                                 '--gain', '1.0', '8.0',
-                                 '--diagnostic', 'full'])
+    with (mock.patch('x_ray_imager_bagriff.identify_lines._cli.find_lines',
+                     return_value=means)
+          as mock_find_lines):
+        result = runner.invoke(cli, ['single', str(events_csv), source.name,
+                                     '--gain', '1.0', '8.0',
+                                     '--diagnostic', 'full'])
+        mock_find_lines.assert_called_once()
+
     assert result.exit_code == 0
     response = np.loadtxt(StringIO(result.stdout), delimiter=',')
-    assert response.shape == means.shape
-    assert response == pytest.approx(means, 0.1)
-    assert (tmp_path / 'Am241-diagnostic.png').exists()
+    assert response[:, 1:] == pytest.approx(means, abs=1e-5)
+    assert response[:, 0] == pytest.approx(source.energies, abs=1e-1)
 
 
-def test_identify_grid_cli(example_points, tmp_path):
-    """Tests that the cli grid loads a listed csv and identifies lines."""
-    points_csv, means = example_points
+def test_identify_multiple_cli(example_points, tmp_path):
+    """Tests that the cli multiple loads a listed csv and identifies lines."""
+    points_csv, means, source = example_points
     runner = CliRunner()
     runner.isolated_filesystem(tmp_path)
     out_path = tmp_path / 'out.csv'
-    result = runner.invoke(cli, ['grid', str(points_csv), 'Am241',
-                                 '--gain', '1.0', '8.0',
-                                 '--output', str(out_path)])
+    with (mock.patch('x_ray_imager_bagriff.identify_lines._cli.find_lines',
+                     return_value=means)
+          as mock_find_lines):
+        result = runner.invoke(cli, ['multiple', str(points_csv), source.name,
+                                    '--gain', '1.0', '8.0',
+                                    '--output', str(out_path)])
+        mock_find_lines.assert_called_once()  # Only one set is provided
+
     print(result.output)
     assert result.exit_code == 0
     df = pd.read_csv(out_path)
@@ -103,7 +115,7 @@ def test_identify_grid_cli(example_points, tmp_path):
 
     # Construct array from columns
     result_means = np.array(
-        [[df[f'{energy:.1f} keV T{tube}'][0] for tube in range(4)]
-         for energy in SourceParams.get_source('Am241').energies]
+        [[df[f'{energy:.1f} keV d{i}'][0] for i in range(4)]
+         for energy in source.energies]
          )
     assert result_means == pytest.approx(means, 0.1)

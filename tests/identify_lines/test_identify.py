@@ -50,7 +50,7 @@ class MockCluster(ClusterMixin):
         return self
 
 
-def test_find_linesl():
+def test_find_lines():
     """Test line identification with preidentified clusters."""
     n_points = 10_000
     means = (256, 512)
@@ -65,7 +65,9 @@ def test_find_linesl():
     source = SourceParams(means)
 
     centers = find_lines(example_set, mock_cluster,
-                                  source, gain_range=(1, 8))
+                         source, gain_range=(1, 8))
+
+    assert centers.shape == (2, 4)
 
     for mean, center in zip(means, centers):
         assert center == pytest.approx([mean]*4, 0.05)
