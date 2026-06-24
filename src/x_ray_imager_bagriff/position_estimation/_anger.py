@@ -56,7 +56,7 @@ def anger_basis(X: ArrayLike  # pylint: disable=invalid-name
     amplitude = np.sum(X, axis=1, dtype=np.float64)
 
     # Exclude null events where the amplitudes are all zero.
-    amplitude = np.where(amplitude < 1., amplitude, np.nan)
+    amplitude = np.where(amplitude < 1., np.nan, amplitude)
 
     x = np.dot(X, [1, 1, -1, -1]) / amplitude
     y = np.dot(X, [-1, 1, 1, -1]) / amplitude

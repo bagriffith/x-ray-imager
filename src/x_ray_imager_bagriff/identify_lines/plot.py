@@ -134,11 +134,12 @@ class AngerDiagnostic(GenericIdentifyDiagnostic):
 
         labels_used = sorted(set(labels))  # type: ignore
 
-        to_plot = np.random.choice(np.shape(X)[0],
-                                   limit_points,
-                                   replace=False)
-        X = np.array(X, dtype=np.float64)[to_plot, :]
-        labels = np.array(labels, dtype=np.long)[to_plot]
+        if np.shape(X)[0] > limit_points:
+            to_plot = np.random.choice(np.shape(X)[0],
+                                       limit_points,
+                                       replace=False)
+            X = np.array(X, dtype=np.float64)[to_plot, :]
+            labels = np.array(labels, dtype=np.long)[to_plot]
 
         _, x, y = anger_basis(X)
 
