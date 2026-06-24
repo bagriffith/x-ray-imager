@@ -189,19 +189,22 @@ def test_interpolation_diagnostics(interpolation_data):
 
 
 def test_cubic_interpolation():
+    """Tests CubicInterpolation accurately interpolates a linear function."""
     energy = np.linspace(50, 500, 19)
     x = np.linspace(-70, 70, 29)
     y = np.linspace(-70, 70, 29)
-    E, X, Y = np.meshgrid(energy, x, y, indexing='ij')
+    e_mesh, x_mesh, y_mesh = np.meshgrid(energy, x, y, indexing='ij')
     response = np.repeat(
-        np.expand_dims((E / 25) * ((X + 100) + 2*(Y + 100)), 3),
+        np.expand_dims((e_mesh / 25) * ((x_mesh + 100) + 2*(y_mesh + 100)), 3),
         4, axis=3)
 
     sampled_energy = energy[::2]
-    sampled_position = np.array(np.meshgrid(x[::2], y[::2]))
+    sampled_position = np.array(np.meshgrid(x[::2], y[::2],
+                                indexing='ij'))
     sampled_response = response[::2, ::2, ::2, :]
     interpolator = CubicInterpolation(sampled_energy,
                                       sampled_position,
                                       sampled_response)
 
-    assert pytest.approx(response, 1e-3) == interpolator.values(E, X, Y)
+    interpolated = interpolator.values(e_mesh, x_mesh, y_mesh)
+    assert pytest.approx(response, 1e-3) == interpolated
