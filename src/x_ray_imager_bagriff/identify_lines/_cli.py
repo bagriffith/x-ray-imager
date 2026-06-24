@@ -25,6 +25,7 @@ import click
 import matplotlib
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from x_ray_imager_bagriff.identify_lines import (
     MinOPTICS,
     SourceParams,
@@ -128,13 +129,15 @@ def single(filename, source, gain, diagnostic, output):
 @click.option('--output', '-o',
               type=click.File(mode='w'), default='-',
               help="Output CSV path instead of stdout.")
+@click.option('--bar', '-b', is_flag=True,
+              help="Print extra information during run.")
 @click.option('--verbose', '-v', flag_value=logging.INFO,
               callback=set_log_level, expose_value=False,
               help="Print extra information during run.")
 @click.option('--debug', '-d', flag_value=logging.DEBUG,
               callback=set_log_level, expose_value=False,
               help="Print out all debug information during run.")
-def multiple(filename, source, gain, output):
+def multiple(filename, source, gain, output, bar):
     """Identify gamma source lines multiple times for multiple sets.
     
     FILENAME should be a CSV with headers where each row being a single set of
@@ -161,13 +164,23 @@ def multiple(filename, source, gain, output):
                  for n in range(n_detectors)]
 
     # For each file, load it
-    df[line_cols] = df[['csv_path']].apply(
-        lambda x: find_lines(load_measurement_csv(x['csv_path']),
-                             cluster,
-                             source,
-                             gain_range=gain).flatten(),
-        axis=1,
-        result_type="expand")
+    if bar:
+        tqdm.pandas()
+        df[line_cols] = df[['csv_path']].progress_apply(
+            lambda x: find_lines(load_measurement_csv(x['csv_path']),
+                                cluster,
+                                source,
+                                gain_range=gain).flatten(),
+            axis=1,
+            result_type="expand")
+    else:
+        df[line_cols] = df[['csv_path']].apply(
+            lambda x: find_lines(load_measurement_csv(x['csv_path']),
+                                cluster,
+                                source,
+                                gain_range=gain).flatten(),
+            axis=1,
+            result_type="expand")
 
     df.to_csv(output,
               index=False,
