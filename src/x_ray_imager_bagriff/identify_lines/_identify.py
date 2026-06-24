@@ -100,6 +100,10 @@ def find_lines(X: NDArray[np.long],  # pylint: disable=invalid-name
         cluster_method.labels_[cluster_method.labels_ >= 0])
     logger.info("Cluster counts: %s", label_count)
 
+    if len(source.energies) == 1:
+        cluster_means = cluster_means[label_count == max(label_count)]
+        label_count = label_count[label_count == max(label_count)]
+
     # Ignore small clusters
     threshold_size = 0.1 * np.sort(label_count)[-1 * len(source.energies)]
     if threshold_size < 0.001*len(cluster_method.labels_):
