@@ -19,9 +19,9 @@
 # SOFTWARE.
 
 """Test the interpolation methods."""
+from unittest import mock
 import pytest
 import numpy as np
-from unittest import mock
 from x_ray_imager_bagriff.response_interpolation import (
     plot, CubicInterpolation, Interpolation
 )
