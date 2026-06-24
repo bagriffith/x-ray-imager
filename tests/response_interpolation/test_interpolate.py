@@ -33,6 +33,7 @@ from x_ray_imager_bagriff.response_interpolation import (
 
 
 class MockDiagnostic(plot.GenericResponseDiagnostic):
+    """Mocks a ResponseDiagnostic instance without plotting or saving."""
     def plot_diagnostic(self, *args, **kwargs):
         pass
     def savefig(self, *args, **kwargs):
@@ -158,27 +159,32 @@ def test_interpolation_diagnostics(interpolation_data):
      _, _, _, interp_responses) = interpolation_data
 
     # Create mock diagnostic objects
-    input_diag = MockDiagnostic()
-    output_diag = MockDiagnostic()
-    error_diag = MockDiagnostic()
+    diagnostics = {s: MockDiagnostic() for s in
+                   ['input_diagnostic',
+                   'output_diagnostic',
+                   'error_diagnostic']}
 
     with (
         mock.patch.object(Interpolation, 'values',
                           return_value=interp_responses),
-        mock.patch.object(input_diag, 'plot_diagnostic') as input_plot,
-        mock.patch.object(input_diag, 'savefig') as input_save,
-        mock.patch.object(output_diag, 'plot_diagnostic') as output_plot,
-        mock.patch.object(output_diag, 'savefig') as output_save,
-        mock.patch.object(error_diag, 'plot_diagnostic') as error_plot,
-        mock.patch.object(error_diag, 'savefig') as error_save
+        mock.patch.object(diagnostics['input_diagnostic'],
+                          'plot_diagnostic') as input_plot,
+        mock.patch.object(diagnostics['input_diagnostic'],
+                          'savefig') as input_save,
+        mock.patch.object(diagnostics['output_diagnostic'],
+                          'plot_diagnostic') as output_plot,
+        mock.patch.object(diagnostics['output_diagnostic'],
+                          'savefig') as output_save,
+        mock.patch.object(diagnostics['error_diagnostic'],
+                          'plot_diagnostic') as error_plot,
+        mock.patch.object(diagnostics['error_diagnostic'],
+                          'savefig') as error_save
     ):
         # Initialize Interpolation with diagnostics
         Interpolation(init_energies,
                       init_positions,
                       init_responses,
-                      input_diagnostic=input_diag,
-                      output_diagnostic=output_diag,
-                      error_diagnostic=error_diag)
+                      **diagnostics)
 
         # Each diagnostic is called once for each energy in init_energies
         for plot, save in [(input_plot, input_save),
