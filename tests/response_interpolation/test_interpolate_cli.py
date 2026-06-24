@@ -33,7 +33,7 @@ from x_ray_imager_bagriff.response_interpolation import _cli
 
 def example_response(positions, energy):
     """Simple response function for testing."""
-    detector_base = positions[0] + 70. + 2.0*(positions[1] + 70.)
+    detector_base = (positions[0] + 70. + 2.0*(positions[1] + 70.)) / 140.
     full_imager = np.multiply.outer(detector_base, (np.arange(4) + 4)/8)
     response = np.multiply.outer(energy, full_imager)
     return response
@@ -42,7 +42,7 @@ def example_response(positions, energy):
 @pytest.fixture
 def example_files(tmp_path):
     """Creates a set of calibration CSV files."""
-    energies = np.array([20., 60., 250., 500.])
+    energies = np.array([9.5, 60., 250., 1001.])
     n_pts = 5
     positions = np.array(np.meshgrid(np.linspace(-70, 70, n_pts),
                                      np.linspace(-70, 70, n_pts),
@@ -85,7 +85,7 @@ def test_interpolate_cli_run(example_files, tmp_path):
         cli_args.extend(['--line', str(energy), str(path)])
 
     output_path = tmp_path / 'grid.npz'
-    cli_args.extend(['--output', str(output_path.absolute())])
+    cli_args.extend(['--output', str(output_path)])
 
     result = runner.invoke(_cli.cli, cli_args)
     assert result.exit_code == 0
@@ -93,6 +93,26 @@ def test_interpolate_cli_run(example_files, tmp_path):
 
     # Check for diagnostic files.
     # The names of diagnostic files are derived from the diagnostic class names.
-    assert (tmp_path / 'in-20_0keV.png').exists()
-    assert (tmp_path / 'out-20_0keV.png').exists()
-    assert (tmp_path / 'error-20_0keV.png').exists()
+    assert (tmp_path / 'in-9_5keV.png').exists()
+    assert (tmp_path / 'out-9_5keV.png').exists()
+    assert (tmp_path / 'error-9_5keV.png').exists()
+
+    grid_arrays = np.load(str(output_path))
+
+    # Check the axis isn't uniform
+    assert grid_arrays['x'][0] != pytest.approx(grid_arrays['x'][-1])
+    even_axis = np.linspace(grid_arrays['x'][0],
+                            grid_arrays['x'][-1],
+                            len(grid_arrays['x']))
+    assert grid_arrays['x'] == pytest.approx(even_axis)
+    assert grid_arrays['y'] == pytest.approx(even_axis)
+
+    # TODO Test response
+    output_positions = np.array(
+        np.meshgrid(grid_arrays['x'], grid_arrays['y'],
+                    indexing='ij'))
+
+    expected_response = example_response(output_positions,
+                                         grid_arrays['energy'])
+    error = np.abs(expected_response - grid_arrays['response'])
+    assert np.all(error < 0.1)

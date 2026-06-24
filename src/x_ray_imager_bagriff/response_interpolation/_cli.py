@@ -138,11 +138,11 @@ def cli(files, lines, output, plot_diagnostics):
                                  for x in response_list])
 
     # Create the high resolution output grid
-    mesh = dict()
     energy_hr = np.arange(10, 1000, 2, dtype=np.double)
     x_hr = np.linspace(-70, 70, 141)
     y_hr = np.linspace(-70, 70, 141)
-    mesh['energy'], mesh['x'], mesh['y'] = np.meshgrid(energy_hr, x_hr, y_hr, indexing='ij')
+    energy_mesh, x_mesh, y_mesh = np.meshgrid(energy_hr, x_hr, y_hr,
+                                              indexing='ij')
 
     diagnostic_kwargs = dict()
     if plot_diagnostics:
@@ -157,10 +157,11 @@ def cli(files, lines, output, plot_diagnostics):
                                       **diagnostic_kwargs)
 
     # Interpolate
-    mesh['response'] = interpolator.values(mesh['energy'],
-                                           mesh['x'],
-                                           mesh['y'])
+    response_mesh = interpolator.values(energy_mesh,
+                                        x_mesh,
+                                        y_mesh)
 
-    # Save arrays
-    print()
-    np.savez(str(output), *mesh)
+    # Save arrays. Response is float32 to save disk space.
+    np.savez(str(output), allow_pickle=False,
+             x=x_hr, y=y_hr, energy=energy_hr,
+             response=np.float32(response_mesh))
