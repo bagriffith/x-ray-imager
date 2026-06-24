@@ -72,7 +72,8 @@ class Interpolation:
         if input_diagnostic is not None:
             for response, energy in zip(responses, energies):
                 input_diagnostic.plot_diagnostic(response, positions)
-                input_diagnostic.savefig(f'in-{energy:.1f}keV.png', dpi=300)
+                input_diagnostic.savefig(f'in-{energy:.1f}'.replace('.', '_')
+                                         + 'keV.png', dpi=300)
 
         max_error = 0.
         mean_error = 0.
@@ -148,11 +149,13 @@ class Interpolation:
             z_mesh = self(e_mesh, x_mesh, y_mesh)
             output_diagnostic.plot_diagnostic(z_mesh,
                                               np.array([x_mesh, y_mesh]))
-            output_diagnostic.savefig(f'out-{energy:.1f}keV.png', dpi=300)
+            output_diagnostic.savefig(f'out-{energy:.1f}'.replace('.', '_')
+                                      + 'keV.png', dpi=300)
 
         if error_diagnostic is not None:
             error_diagnostic.plot_diagnostic(errors, positions)
-            error_diagnostic.savefig(f'error-{energy:.1f}keV.png', dpi=300)
+            error_diagnostic.savefig(f'error-{energy:.1f}'.replace('.', '_')
+                                     + 'keV.png', dpi=300)
 
         max_error = np.max(np.abs(errors))
         mean_error = float(np.mean(np.abs(errors)))
@@ -216,8 +219,8 @@ class CubicInterpolation(Interpolation):
         positions = np.array(positions)
         logging.debug(energies)
         # TODO, test that grid is rectancular
-        x = positions[0, 0, :].copy()
-        y = positions[1, :, 0].copy()
+        x = positions[0, :, 0].copy()
+        y = positions[1, 0, :].copy()
 
         self.grid_interp = \
             RegularGridInterpolator([energies, x, y], centers,
