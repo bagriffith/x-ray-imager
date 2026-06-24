@@ -94,6 +94,19 @@ def find_lines(X: NDArray[np.long],  # pylint: disable=invalid-name
         diagnostic.savefig(f'./{source.name}-diagnostic.png', dpi=300)
 
     cluster_means = line_means(X[in_range], cluster_method.labels_)
+    logger.debug("Cluster means:\n%s", cluster_means)
+
+    label_count = np.bincount(
+        cluster_method.labels_[cluster_method.labels_ >= 0])
+    logger.info("Cluster counts: %s", label_count)
+
+    # Ignore small clusters
+    threshold_size = 0.1 * np.sort(label_count)[-1 * len(source.energies)]
+    if threshold_size < 0.001*len(cluster_method.labels_):
+        logger.warning('Small clusters with only %d events may be selected.',
+                       np.ceil(threshold_size))
+    cluster_means = cluster_means[label_count > threshold_size]
+
     matched_labels = match_energy(cluster_means, source.energies, gain_range)
 
     return cluster_means[matched_labels]
