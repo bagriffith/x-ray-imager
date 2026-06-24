@@ -51,13 +51,15 @@ def set_log_level(ctx, param, value):
 @click.option('--output', '-o',
               type=click.Path(dir_okay=False), default='./grid.npz',
               help="Output path instead of stdout.")
+@click.option('--diagnostics', '-p', 'plot_diagnostics', is_flag=True,
+              help="Save diagnostic plots.")
 @click.option('--verbose', '-v', flag_value=logging.INFO,
               callback=set_log_level, expose_value=False,
               help="Print extra information during run.")
 @click.option('--debug', '-d', flag_value=logging.DEBUG,
               callback=set_log_level, expose_value=False,
               help="Print out all debug information during run.")
-def cli(files, lines, output):
+def cli(files, lines, output, plot_diagnostics):
     """Collects a set of gamma line responses and outputs an interpolated grid.
 
     Line responses should be contained in a CSV with one source position
@@ -142,14 +144,17 @@ def cli(files, lines, output):
     y_hr = np.linspace(-70, 70, 141)
     mesh['energy'], mesh['x'], mesh['y'] = np.meshgrid(energy_hr, x_hr, y_hr, indexing='ij')
 
-    print('')
-    interpolator = \
-        CubicInterpolation(sampled_energy,
-                           sampled_position,
-                           sampled_response,
-                           input_diagnostic=plot.GridWireframeDiagnostic(),
-                           output_diagnostic=plot.ColorMeshDiagnostic(),
-                           error_diagnostic=plot.ColorMeshDiagnostic())
+    diagnostic_kwargs = dict()
+    if plot_diagnostics:
+        diagnostic_kwargs = \
+            {'input_diagnostic': plot.GridWireframeDiagnostic(),
+             'output_diagnostic': plot.ColorMeshDiagnostic(),
+             'error_diagnostic': plot.ColorMeshDiagnostic()}
+
+    interpolator = CubicInterpolation(sampled_energy,
+                                      sampled_position,
+                                      sampled_response,
+                                      **diagnostic_kwargs)
 
     # Interpolate
     mesh['response'] = interpolator.values(mesh['energy'],

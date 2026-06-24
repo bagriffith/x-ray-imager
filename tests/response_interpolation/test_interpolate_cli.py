@@ -31,6 +31,14 @@ from x_ray_imager_bagriff.response_interpolation import _cli
 # pylint: disable=redefined-outer-name
 
 
+def example_response(positions, energy):
+    """Simple response function for testing."""
+    detector_base = positions[0] + 70. + 2.0*(positions[1] + 70.)
+    full_imager = np.multiply.outer(detector_base, (np.arange(4) + 4)/8)
+    response = np.multiply.outer(energy, full_imager)
+    return response
+
+
 @pytest.fixture
 def example_files(tmp_path):
     """Creates a set of calibration CSV files."""
@@ -41,13 +49,10 @@ def example_files(tmp_path):
                                      indexing='ij')).reshape((2, n_pts*n_pts))
 
     # Simple output data
-    response = np.empty((len(energies), n_pts*n_pts, 4), dtype=np.double)
+    response = example_response(positions, energies)
     response_csv = list()
-    for i, energy in enumerate(energies):
-        for det_n in range(4):
-            response[i, :, det_n] = 0.125 * energy * (det_n + 4) \
-                * (positions[0] + 70. + 1.5*(positions[1] + 70.))
 
+    for energy, response_e in zip(energies, response):
         # Write the example line to a file
         csv_path = tmp_path / (f'{energy:.1f} keV'.replace('.', '_')+'.csv')
         response_csv.append(str(csv_path))
@@ -56,14 +61,13 @@ def example_files(tmp_path):
                    'y': positions[1]}
 
         for det_n in range(4):
-            df_dict[f'{energy:.1f} keV d{det_n}'] = response[i, :, det_n]
+            df_dict[f'{energy:.1f} keV d{det_n}'] = response_e[:, det_n]
 
         df = pd.DataFrame(df_dict)
-        with open(response_csv[-1], 'w') as f:
-            df.to_csv(f,
-                      index=False,
-                      float_format='%.6f',
-                      quoting=csv.QUOTE_NONNUMERIC)
+        df.to_csv(response_csv[-1],
+                  index=False,
+                  float_format='%.6f',
+                  quoting=csv.QUOTE_NONNUMERIC)
 
     # Return paths to the files
     return response_csv, energies
@@ -73,10 +77,10 @@ def test_interpolate_cli_run(example_files, tmp_path):
     """Test a run of the CLI with correctly formatted calibration set."""
     response_csv_paths, energies = example_files
     runner = CliRunner()
-    os.chdir(str(tmp_path))
+    os.chdir(str(tmp_path))  # Run inside the temporary directory
 
     # Prepare arguments for the CLI
-    cli_args = []
+    cli_args = ['--diagnostics']
     for energy, path in zip(energies, response_csv_paths):
         cli_args.extend(['--line', str(energy), str(path)])
 
@@ -89,7 +93,6 @@ def test_interpolate_cli_run(example_files, tmp_path):
 
     # Check for diagnostic files.
     # The names of diagnostic files are derived from the diagnostic class names.
-    # I'll assume they are saved as .png files in the current working directory.
     assert (tmp_path / 'in-20_0keV.png').exists()
     assert (tmp_path / 'out-20_0keV.png').exists()
     assert (tmp_path / 'error-20_0keV.png').exists()
