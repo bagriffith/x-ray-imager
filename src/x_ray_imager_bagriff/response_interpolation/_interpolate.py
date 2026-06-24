@@ -218,7 +218,7 @@ class CubicInterpolation(Interpolation):
         centers = centers[ind, :, :, :]
         positions = np.array(positions)
         logging.debug(energies)
-        # TODO, test that grid is rectancular
+        # TODO, test that grid is rectangular
         x = positions[0, :, 0].copy()
         y = positions[1, 0, :].copy()
 
