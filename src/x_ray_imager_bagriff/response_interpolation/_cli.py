@@ -59,6 +59,7 @@ def set_log_level(ctx, param, value):
 @click.option('--debug', '-d', flag_value=logging.DEBUG,
               callback=set_log_level, expose_value=False,
               help="Print out all debug information during run.")
+@click.version_option(message="%(prog)s from %(package)s, version %(version)s")
 def cli(files, lines, output, plot_diagnostics):
     """Collects a set of gamma line responses and outputs an interpolated grid.
 

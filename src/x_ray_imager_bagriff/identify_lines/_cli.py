@@ -64,6 +64,7 @@ def load_measurement_csv(filename):
 
 
 @click.group()
+@click.version_option(message="%(prog)s from %(package)s, version %(version)s")
 def cli():
     """Tools to identify gamma source lines in x-ray imager data."""
 

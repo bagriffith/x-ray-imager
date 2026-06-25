@@ -1,10 +1,10 @@
 [project]
 name = "x_ray_imager_bagriff"
-version = "0.0.1"
+version = "0.1.0"
 authors = [
   { name="Brady Griffith", email="bagriff@uw.edu" },
 ]
-description = "Tools to estimate postion for an x-ray imager."
+description = "Tools to estimate position for an x-ray imager."
 readme = "README.md"
 requires-python = ">=3.9"
 classifiers = [
@@ -26,6 +26,10 @@ dependencies = [
   "tqdm>=4.68.3",
   "xraydb>=4.5.8"
 ]
+
+[build-system]
+requires = ["setuptools >= 77.0.3"]
+build-backend = "setuptools.build_meta"
 
 [project.urls]
 Homepage = "https://github.com/bagriffith/x-ray-imager"
