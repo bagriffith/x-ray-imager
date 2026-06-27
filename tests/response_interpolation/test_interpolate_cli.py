@@ -48,8 +48,14 @@ def example_files(tmp_path):
                                      np.linspace(-70, 70, n_pts),
                                      indexing='ij')).reshape((2, n_pts*n_pts))
 
+    # Should be able to handle positions given in any order
+    np.random.seed(0)  # For consistent behavior
+    new_order = np.random.permutation(n_pts*n_pts)
+    positions = positions[:, new_order]
+
     # Simple output data
     response = example_response(positions, energies)
+
     response_csv = list()
 
     for energy, response_e in zip(energies, response):
