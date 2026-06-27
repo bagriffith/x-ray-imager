@@ -170,8 +170,8 @@ def multiple(filename, source, gain, output, bar):
         n_pts /= 10
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=50.0 * n_pts**(-0.333),
-                        min_cluster_size=0.01,
+                        max_eps=60.0 * n_pts**(-0.333),
+                        min_cluster_size=0.025,
                         cluster_method='dbscan')
 
     n_detectors = 4  # This could be added as an option if needed.
