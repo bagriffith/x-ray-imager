@@ -105,8 +105,8 @@ def single(filename, source, gain, diagnostic, output):
     #   indicate that I should add an option for it.
     # TODO: Explain scaling factors
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=5.0 * np.max(source.energies)**0.5 \
-                                * events.shape[0]**(-0.333),
+                        max_eps=60.0 * events.shape[0]**(-0.333),
+                        min_cluster_size=0.01,
                         cluster_method='dbscan')
 
     responses = find_lines(events,
@@ -162,8 +162,8 @@ def multiple(filename, source, gain, output, bar):
     n_pts = load_measurement_csv(df['csv_path'][0]).shape[0]
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=5.0 * np.max(source.energies)**0.5 \
-                                * n_pts**(-0.333),
+                        max_eps=60.0 * n_pts**(-0.333),
+                        min_cluster_size=0.01,
                         cluster_method='dbscan')
 
     n_detectors = 4  # This could be added as an option if needed.
