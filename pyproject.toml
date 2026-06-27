@@ -1,6 +1,6 @@
 [project]
 name = "x_ray_imager_bagriff"
-version = "0.1.0"
+version = "0.1.1.dev"
 authors = [
   { name="Brady Griffith", email="bagriff@uw.edu" },
 ]
@@ -38,3 +38,14 @@ Issues = "https://github.com/bagriffith/x-ray-imager/issues"
 [project.scripts]
 identify-lines = "x_ray_imager_bagriff.identify_lines._cli:cli"
 response-interpolation = "x_ray_imager_bagriff.response_interpolation._cli:cli"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.setuptools.package-data]
+x_ray_imager_bagriff = ["*.mplstyle"]
+
