@@ -104,9 +104,14 @@ def single(filename, source, gain, diagnostic, output):
     #   modifying this function. Frequently adjusting these settings would
     #   indicate that I should add an option for it.
     # TODO: Explain scaling factors
+    n_pts = events.shape[0]
+
+    if source.name == 'Cd109':
+        n_pts /= 10  # Correct for the smallsize of the 88 keV peak
+
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=60.0 * events.shape[0]**(-0.333),
-                        min_cluster_size=0.01,
+                        max_eps=60.0 * n_pts**(-0.333),
+                        min_cluster_size=0.025,
                         cluster_method='dbscan')
 
     responses = find_lines(events,
@@ -161,8 +166,11 @@ def multiple(filename, source, gain, output, bar):
 
     n_pts = load_measurement_csv(df['csv_path'][0]).shape[0]
 
+    if source.name == 'Cd109':
+        n_pts /= 10
+
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=60.0 * n_pts**(-0.333),
+                        max_eps=50.0 * n_pts**(-0.333),
                         min_cluster_size=0.01,
                         cluster_method='dbscan')
 
