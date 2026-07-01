@@ -62,17 +62,6 @@ def load_measurement_csv(filename):
     return response
 
 
-def click_bar_wrapper(f, bar):
-    status = dict(i=0)
-
-    def wrapped(x, status=status):
-        bar.update(status['i'])
-        status['i'] += 1
-        return f(x)
-
-    return wrapped
-
-
 @click.group()
 @click.version_option(message="%(prog)s from %(package)s, version %(version)s")
 def cli():
@@ -204,19 +193,27 @@ def multiple(filename, source, gain, output, use_bar):
                                       gain_range=gain)
         return identified_lines.flatten()
 
+    bar = None
+
     if use_bar:
-        with click.progressbar(length=len(df),
-                               label="Identifying gamma lines",
-                               show_pos=True) as bar:
-            df[line_cols] = df[['csv_path']]\
-                .apply(click_bar_wrapper(row_lines, bar),
-                       axis=1,
-                       result_type="expand")
+        bar = click.progressbar(length=len(df),
+                                label="Identifying gamma lines",
+                                show_pos=True)
+        bar.__enter__()
+
+        def f(x):
+            bar.update(1)
+            return row_lines(x)
     else:
-        df[line_cols] = df[['csv_path']]\
-            .apply(row_lines,
-                   axis=1,
-                   result_type="expand")
+        f = row_lines
+
+    df[line_cols] = df[['csv_path']]\
+        .apply(f,
+                axis=1,
+                result_type="expand")
+    
+    if bar is not None:
+        bar.__exit__(None, None, None)
 
     df.to_csv(output,
               index=False,
