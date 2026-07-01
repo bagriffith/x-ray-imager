@@ -107,11 +107,12 @@ def single(filename, source, gain, diagnostic, output):
     n_pts = events.shape[0]
 
     if source.name == 'Cd109':
-        n_pts /= 10  # Correct for the smallsize of the 88 keV peak
+        n_pts /= 20  # Correct for the smallsize of the 88 keV peak
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=60.0 * n_pts**(-0.333),
-                        min_cluster_size=0.025,
+                        max_eps=30.0 * n_pts**(-0.333),
+                        min_cluster_size=0.015,
+                        p=10,
                         cluster_method='dbscan')
 
     responses = find_lines(events,
@@ -167,11 +168,12 @@ def multiple(filename, source, gain, output, bar):
     n_pts = load_measurement_csv(df['csv_path'][0]).shape[0]
 
     if source.name == 'Cd109':
-        n_pts /= 10
+        n_pts /= 20
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=60.0 * n_pts**(-0.333),
-                        min_cluster_size=0.025,
+                        max_eps=30.0 * n_pts**(-0.333),
+                        min_cluster_size=0.015,
+                        p=10,
                         cluster_method='dbscan')
 
     n_detectors = 4  # This could be added as an option if needed.
