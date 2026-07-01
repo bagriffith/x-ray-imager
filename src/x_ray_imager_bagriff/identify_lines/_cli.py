@@ -118,6 +118,8 @@ def single(filename, source, gain, diagnostic, output):
 
     if source.name == 'Cd109':
         n_pts /= 20  # Correct for the smallsize of the 88 keV peak
+    elif source.name == 'Na22':
+        n_pts /= 14**3  # Energy correction
 
     cluster = MinOPTICS(min_clusters=len(source),
                         max_eps=30.0 * n_pts**(-0.333),
