@@ -107,11 +107,9 @@ def single(filename, source, gain, diagnostic, output):
 
     if source.name == 'Cd109':
         n_pts /= 20  # Correct for the smallsize of the 88 keV peak
-    elif source.name == 'Na22':
-        n_pts /= 14**3  # Energy correction
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=30.0 * n_pts**(-0.333),
+                        max_eps=40.0 * n_pts**(-0.333),
                         min_cluster_size=0.015,
                         p=10,
                         cluster_method='dbscan')
@@ -170,11 +168,9 @@ def multiple(filename, source, gain, output, use_bar):
 
     if source.name == 'Cd109':
         n_pts /= 20  # Correct for the smallsize of the 88 keV peak
-    elif source.name == 'Na22':
-        n_pts /= 14**3  # Energy correction
 
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=30.0 * n_pts**(-0.333),
+                        max_eps=40.0 * n_pts**(-0.333),
                         min_cluster_size=0.015,
                         p=10,
                         cluster_method='dbscan')
@@ -214,6 +210,7 @@ def multiple(filename, source, gain, output, use_bar):
     
     if bar is not None:
         bar.__exit__(None, None, None)
+
 
     df.to_csv(output,
               index=False,
