@@ -18,6 +18,7 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+"""Methods to estimate the position/energy for x-ray imager measurements."""
 from ._estimator import PointEstimator
 from ._anger import AngerSimple, anger_basis
 from ._lookup import (
