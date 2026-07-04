@@ -82,7 +82,7 @@ def test_estimator_save(tmp_path, example_response):
 
     np.testing.assert_array_equal(estimator.response,
                                   loaded_estimator.response)
-    np.testing.assert_array_equal(estimator.energies,
+    np.testing.assert_array_equal(estimator.points[0],
                                   loaded_estimator.energies)
     np.testing.assert_array_equal(estimator.positions,
                                   loaded_estimator.positions)
@@ -105,12 +105,12 @@ def test_get_values_shape(example_response):
 
     # With error output
     estimation_1d_with_error, error_1d = \
-        estimator.get_value(observations_1d, return_error=True)
+        estimator.get_values_with_error(observations_1d)
     assert estimation_1d_with_error.shape == (3, 2)
     assert error_1d.shape == (3, 2)
 
     # Test with 2D observation and return_error=True
     estimation_2d_with_error, error_2d = \
-        estimator.get_value(observations_2d, return_error=True)
+        estimator.get_values_with_error(observations_2d)
     assert estimation_2d_with_error.shape == (3, 2, 3)
     assert error_2d.shape == (3, 2, 3)

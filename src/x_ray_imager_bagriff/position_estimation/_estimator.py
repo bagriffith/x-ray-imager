@@ -50,10 +50,8 @@ class PointEstimator:
             response: Expected responses for an array of points.
                 The array can be any shape that matches the energies
                 and positions: (*shape of measurements, n detectors).
-            energy: Energy for each sampled position.
-                Shape should be (*shape of measurements).
-            positions: x and y position of sampled points.
-                Shape should be (2, *shape of measurements)
+            points: Array  with axis 0 having eenergy, x and y of samples.
+                Shape is (3, *shape of measurements)
         """
         # Check input array shapes
         response_shape = np.shape(response)
@@ -82,47 +80,48 @@ class PointEstimator:
             raise ValueError("Mismatch between response and positions shape, "
                              f"{response_shape} and {positions_shape}.")
 
+        self._idx = None
+
         # Load arrays
         self.response = np.array(response, dtype=np.float64)\
                             .reshape((-1, response_shape[-1]))
-        self.energies = np.array(energies, dtype=np.float64)\
-                            .reshape((-1))
-        self.positions = np.array(positions, dtype=np.float64)\
-                            .reshape((2, -1))
+        self.points = np.append(np.array(energies, dtype=np.float64)\
+                                    .reshape((1, -1)),
+                                np.array(positions, dtype=np.float64)\
+                                    .reshape((2, -1)),
+                                axis=0)
 
-    def __call__(self,
-                 observations: ArrayLike,
-                 return_error: bool=False
-                 ) -> Union[NDArray[np.double],
-                            tuple[NDArray[np.double], NDArray[np.double]]]:
+    def __call__(self, observations: ArrayLike) -> NDArray[np.double]:
         """See get_value()."""
-        return self.get_value(observations, return_error)
+        return self.get_value(observations)
 
-    def get_value(self,
-                  observations: ArrayLike,
-                  return_error: bool = False
-                  ) -> Union[NDArray[np.double],
-                             tuple[NDArray[np.double], NDArray[np.double]]]:
+    def get_value(self, observations: ArrayLike) -> NDArray[np.double]:
         """Estimate the x-ray energy/possition producing the observations.
 
         Args:
             observations: Measurements from the x-ray imager. Can be any
                 shape, but the last dimmention must have n_detectors elements.
                 Shape is (*any_measurements_shape, n_detectors)
-            return_error: Should a tuple be returned with the uncertainties
-                alongside the estimated position/energy.
         
         Returns:
-            Either an array of the estimated energy, x, and y or that and then
-            the uncertainty of those estimations. Both arrays would have
-            shape (3, *any_measurements_shape)
+            An array of the estimated energy, x, and y. Shape is
+            (3, *any_measurements_shape).
         """
         logger.warning("Unimplemented base estimator is being called.")
-        estimation = np.full((3, *np.shape(observations)[:-1]), np.nan)
-        if return_error:
-            return estimation, estimation.copy()
-        else:
-            return estimation
+        return np.full((3, *np.shape(observations)[:-1]), np.nan)
+
+    def get_values_with_error(self, observations: ArrayLike
+                              ) -> tuple[NDArray[np.double],
+                                         NDArray[np.double]]:
+        """Estimate x-ray energy/position with uncertainties.
+        
+        Args:
+            observations: See get_values
+        """
+        logger.warning("Unimplemented base estimator is being called.")
+        estimation = self.get_value(observations)
+        error = np.zeros_like(estimation)
+        return estimation, error
 
     def save_to(self, path: str|Path):
         """Save this estimator to a file to be reloaded later.
@@ -155,3 +154,13 @@ class PointEstimator:
         return cls(loaded['response'],
                    loaded['energies'],
                    loaded['positions'])
+
+    @property
+    def energies(self) -> NDArray[np.float64]:
+        """Returns the energy component of points."""
+        return self.points[0]
+
+    @property
+    def positions(self) -> NDArray[np.float64]:
+        """Returns the energy component of points."""
+        return self.points[1:]

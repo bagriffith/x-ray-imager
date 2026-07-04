@@ -18,169 +18,141 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import logging
+from typing import override, Optional
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
 from sklearn.neighbors import KDTree
 from x_ray_imager_bagriff.position_estimation import (
     PointEstimator,
     anger_basis
 )
+from scipy.stats import poisson
+
+logger = logging.getLogger(__name__)
 
 
 class PointLookup(PointEstimator):
+    """A generic base for estimator methods using closest calibration."""
     short_name = 'base_lookup'
 
-    def __init__(self, channels, energies, positions):
-        self.channels = np.array(channels)
-        self.energies = np.array(energies)
-        self.positions = np.array(positions)
+    @override
+    def __init__(self,
+                 response: ArrayLike,
+                 energies: ArrayLike,
+                 positions: ArrayLike):
+        super().__init__(response, energies, positions)
 
-        assert self.channels.shape[:-1] == self.energies.shape
-        assert self.channels.shape[:-1] == positions.shape[:-1]
-        assert self.channels.shape[-1] == 4
-        assert self.positions.shape[-1] == 2
+        self._idx = None  # Stores index looked up from last request.
+        self._weights = None
 
-        self.channels = self.channels.reshape((-1, 4))
-        self.energies = self.energies.reshape((-1))
-        self.positions = self.positions.reshape((-1, 2))
+    def lookup_index(self,
+                     observations: ArrayLike
+                     ) -> tuple[NDArray[np.intp], NDArray[np.float64]]:
+        """Find the closest calibration points and their weight.
 
-        self.build()
-        self.validate()
+        Using any lookup method, grab the index some number of points. Also
+        return a weight for each point. All weights for an observation should
+        sum to one.
+        
+        Both arrays should have shape (*any_measurements_shape, n_indices).
 
-    def build(self):
-        pass
+        Args:
+             observations: See get_value.
+                Shape should be (*any_measurements_shape, n_detectors).
 
-    def validate(self):
-        pass
+        Returns:
+            A tuple of two arrays. The first is a set of indices for close
+            calibration points from each measurement. The second is the
+            relative weight for each index.
+        """
+        logger.warning("PointLookup lookup_index called but not implemented.")
 
-    def lookup_index(self, channels):
-        raise NotImplementedError('Default class')
-        return np.zeros_like(channels, dtype='uint'), None
+        self._idx = np.zeros((*np.shape(observations)[:-1], 1), dtype=np.intp)
+        self._weights = np.zeros_like(self._idx, dtype=np.float64)
 
-    def estimate_error(self, ind):
-        return (np.full_like(ind, 10.),
-                np.full_like(ind, 5.),
-                np.full_like(ind, 5.))
+        return self._idx, self._weights
 
-    def get_value(self, channels, return_error=False):
-        ind, weights = self.lookup_index(channels)
+    @override
+    def get_value(self, observations):
+        """Estimate using a weighted set of close calibration points."""
+        idx, weights = self.lookup_index(observations)
 
-        if weights is None:
-            e = self.energies[ind]
-            x = self.positions[ind, 0]
-            y = self.positions[ind, 1]
-        else:
-            total = np.sum(weights, axis=-1)
-            # clean up the worst fits
-            bad_fit = total == 0
+        if not np.allclose(np.sum(weights, axis=-1), 1):
+            logger.warning('Some weights did not add up to one.')
 
-            weights[bad_fit] = 1.
-            total[bad_fit] = weights.shape[-1]
-            weights = (weights.T/total).T
+        weights = np.repeat(weights[np.newaxis, ...], 3, axis=0)
+        print(weights)
 
-            e = np.sum(self.energies[ind]*weights, axis=-1)
-            x = np.sum(self.positions[ind, 0]*weights, axis=-1)
-            y = np.sum(self.positions[ind, 1]*weights, axis=-1)
+        return np.average(self.points[:, idx], weights=weights, axis=-1)
 
-        if return_error:
-            if weights is None:
-                # Lookup an estimate
-                err_e, err_x, err_y = self.estimate_error(ind)
-            else:
-                err_e = .01 + np.sqrt(
-                    np.sum((self.energies[ind].T - e)**2 * weights.T,
-                           axis=0))
-                err_x = .1 + np.sqrt(
-                    np.sum((self.positions[ind, 0].T - x)**2 * weights.T,
-                           axis=0))
-                err_y = .1 + np.sqrt(
-                    np.sum((self.positions[ind, 1].T - y)**2 * weights.T,
-                           axis=0))
+    @override
+    def get_values_with_error(self, observations: ArrayLike
+                              ) -> tuple[NDArray[np.double],
+                                         NDArray[np.double]]:
+        prediction = self.get_value(observations)
+        assert self._idx is not None and self._weights is not None
 
-            return (e, x, y), (err_e, err_x, err_y)
-        else:
-            return e, x, y
+        # Calculate weighted variance
+        d2 = np.abs(self.points[:, self._idx] - prediction[..., np.newaxis])**2
+        var = np.sum(self._weights * d2, axis=1) \
+            / np.sum(self._weights, axis=-1)
+        error = np.sqrt(var)
+
+        return prediction, error
 
 
-class LookupGradError(PointLookup):
-    short_name = 'base_lookup_grad'
+class TreeLookup(PointLookup):
+    """Point lookup using a KDTree."""
+    short_name = 'kdtree'
 
-    def __init__(self, channels, energies, positions):
-        # energy_points, x_points, y_points = energies.shape
-        # TODO, check shape
-        # v = np.reshape(channels, (energy_points, x_points, y_points, 4))
+    def __init__(self,
+                 response: ArrayLike,
+                 energies: ArrayLike,
+                 positions: ArrayLike,
+                 k_lookup: Optional[int] = None):
+        super().__init__(response, energies, positions)
+        self._kdtree = KDTree(self.response,
+                              leaf_size=128,
+                              metric='euclidean')
 
-        g = np.gradient(channels, energies[:, 0, 0],
-                        positions[0, :, 0, 0],
-                        positions[0, 0, :, 1],
-                        axis=[0, 1, 2])
-        g = np.divide(np.sqrt(channels/10), g)
-        self.errors = np.zeros((g.shape[1]*g.shape[2]*g.shape[3], 3))
-        for i in range(3):
-            self.errors[:, i] = np.sqrt(np.sum(g[i]**2, axis=-1)).flatten()
+        if k_lookup is None:
+            # Find a very low amplitude point which will have high variance.
+            # See how many points are needed to grab a roughly 3 sigma radius.
+            amplitude = np.sum(self.response, axis=-1)
+            i = np.argmin(amplitude)
 
-        super().__init__(channels, energies, positions)
+            k_lookup = int(self._kdtree.query_radius([self.response[i]],
+                                                     3*np.sqrt(amplitude[i]/4),
+                                                     count_only=True)[0])
+            logger.info('Lookup set to %s points.', k_lookup)
 
+        self.k_lookup = k_lookup
 
-class TreeLookup(LookupGradError):
-    short_name = 'tree'
+    @override
+    def lookup_index(self, observations):
+        """Find closes indices in the KDtree."""
+        observations = np.array(observations, dtype=np.int32)
 
-    def build(self):
-        self.kdtree = KDTree(self.channels, leaf_size=32, metric='euclidean')
+        self._idx = self._kdtree.query(observations, 64,
+                                       return_distance=False,
+                                       sort_results=False)
+        k = np.repeat(observations[..., np.newaxis, :],
+                      np.shape(self._idx)[-1], axis=-2)
+        mu = self.response[self._idx]
+        p = np.prod(poisson.pmf(k, mu), axis=-1)
 
-    def lookup_index(self, channels):
-        return self.kdtree.query(channels)[1][:, 0], None
+        logger.debug("Identifying observations: %s", observations)
+        logger.debug("Identified calibration points: %s",
+                     self.points[:, self._idx])
+        logger.debug("Probabilities: %s", p)
 
+        incomplete_set = np.min(p, axis=-1) > 0.01 * np.max(p, axis=-1)
+        if np.any(incomplete_set):
+            logger.warning("Some measurements fit calibration poorly.")
+            logger.info("Max match at points: %s",
+                        observations[incomplete_set])
 
-class ProbLookup(LookupGradError):
-    short_name = 'prob'
+        self._weights = p / np.sum(p, axis=-1)[..., np.newaxis]
 
-    def build(self):
-        self.kdtree = KDTree(self.channels, leaf_size=32, metric='euclidean')
-
-    def lookup_index(self, channels):
-        gain2 = .04  # g squared
-        ind = self.kdtree.query(channels, k=32)[1]
-
-        diff = np.empty((ind.shape[0], 4, ind.shape[1]))
-        for i in range(ind.shape[-1]):
-            diff[:, :, i] = \
-                (self.channels[ind[:, i]] - channels)**2 \
-                / (gain2*self.channels[ind[:, i]])
-
-        error = np.sum(diff, axis=1)
-
-        return ind, np.exp(-error/2)
-
-
-class AngerTreeLookup(LookupGradError):
-    short_name = 'tree_anger'
-
-    def build(self):
-        self.kdtree = KDTree(anger_basis(self.channels),
-                             leaf_size=32, metric='euclidean')
-
-    def lookup_index(self, channels):
-        return self.kdtree.query(anger_basis(channels))[1][:, 0], None
-
-
-class AngerProbLookup(LookupGradError):
-    short_name = 'prob_anger'
-
-    def build(self):
-        channels = self.channels
-        self.kdtree = KDTree(anger_basis(channels),
-                             leaf_size=32, metric='euclidean')
-
-    def lookup_index(self, channels):
-        gain2 = .04  # g squared
-        ind = self.kdtree.query(anger_basis(channels),
-                                k=64, sort_results=False,
-                                return_distance=False)[1]
-
-        diff = np.empty((ind.shape[0], 4, ind.shape[1]))
-        for i in range(ind.shape[-1]):
-            diff[:, :, i] = (self.channels[ind[:, i]] - channels)**2 \
-                / (gain2*self.channels[ind[:, i]])
-
-        error = np.sum(diff, axis=1)
-        return ind, np.exp(-error/2)
+        return self._idx, self._weights

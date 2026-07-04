@@ -20,10 +20,7 @@
 
 import pytest
 import numpy as np
-from x_ray_imager_bagriff.position_estimation import (
-    LookupGradError,
-    TreeLookup
-)
+from x_ray_imager_bagriff.position_estimation import TreeLookup
 
 # For pytest fixtures
 # pylint: disable=redefined-outer-name
@@ -31,26 +28,29 @@ from x_ray_imager_bagriff.position_estimation import (
 
 @pytest.fixture
 def response():
+    """Create an example detector response."""
     energy = np.linspace(50, 500, 19)
     x = np.linspace(-70, 70, 29)
     y = np.linspace(-70, 70, 29)
-    E, X, Y = np.meshgrid(energy, x, y, indexing='ij')
-    energy = np.arange(100, 1000, 10)
-    value = np.repeat(np.expand_dims(E, axis=3), 4, axis=3) * \
-        (np.repeat(np.expand_dims(X, axis=3), 4, axis=3)*[1, 1, -1, -1]
-         + np.repeat(np.expand_dims(Y, axis=3), 4, axis=3)*[-1, 1, 1, -1]
-         + 140)
+    e_mesh, x_mesh, y_mesh = np.meshgrid(energy, x, y, indexing='ij')
 
-    return [value, E, np.moveaxis(np.array([X, Y]), 0, -1)]
+    value = (2/140) * e_mesh[..., np.newaxis] * (
+                x_mesh[..., np.newaxis] @ [[1, 1, -1, -1]] + 70
+                + 2 * (y_mesh[..., np.newaxis] @ [[-1, 1, 1, -1]] + 70))
+
+    return [value, e_mesh, np.array([x_mesh, y_mesh])]
 
 
 def test_lookup_tree(response):
-    pos_est = TreeLookup(*response)
+    """Tests the tree lookup position estimator can identify correctly."""
     channels, energy, position = response
-    channels = channels.reshape((-1, 4))
-    energy = energy.reshape((-1))
-    position = position.reshape((-1, 2))
-    e_out, x_out, y_out = pos_est.get_value(channels)
-    assert e_out == pytest.approx(energy)
-    assert x_out == pytest.approx(position[:, 0])
-    assert y_out == pytest.approx(position[:, 1])
+    pos_est = TreeLookup(channels, energy, position)
+    channels_test = channels[1:-1:2, 1:-1:2, 1:-1:2, :]\
+        .reshape((-1, channels.shape[-1]))
+    energy_test = energy[1:-1:2, 1:-1:2, 1:-1:2]\
+        .reshape((-1))
+    position_test = position[:, 1:-1:2, 1:-1:2, 1:-1:2]\
+        .reshape((2, -1))
+    estimation = pos_est.get_value(channels_test)
+    assert estimation[0] == pytest.approx(energy_test, abs=0.5)
+    assert estimation[1:] == pytest.approx(position_test, abs=2.5)

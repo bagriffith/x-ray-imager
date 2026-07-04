@@ -23,19 +23,11 @@ from ._estimator import PointEstimator
 from ._anger import AngerSimple, anger_basis
 from ._lookup import (
     PointLookup,
-    LookupGradError,
-    TreeLookup,
-    ProbLookup,
-    AngerTreeLookup,
-    AngerProbLookup
+    TreeLookup
 )
 
 __all__ = ["PointEstimator",
            "AngerSimple",
            "anger_basis",
            "PointLookup",
-           "LookupGradError",
-           "TreeLookup",
-           "ProbLookup",
-           "AngerTreeLookup",
-           "AngerProbLookup"]
+           "TreeLookup"]
