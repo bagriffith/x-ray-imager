@@ -37,6 +37,7 @@ Issues = "https://github.com/bagriffith/x-ray-imager/issues"
 [project.scripts]
 identify-lines = "x_ray_imager_bagriff.identify_lines._cli:cli"
 response-interpolation = "x_ray_imager_bagriff.response_interpolation._cli:cli"
+position-estimation = "x_ray_imager_bagriff.position_estimation._cli:cli"
 
 [tool.setuptools]
 include-package-data = true
@@ -44,7 +45,5 @@ include-package-data = true
 [tool.setuptools.packages.find]
 where = ["src"]
 
-
 [tool.setuptools.package-data]
 x_ray_imager_bagriff = ["*.mplstyle"]
-

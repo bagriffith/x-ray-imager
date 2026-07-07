@@ -82,7 +82,6 @@ class PointLookup(PointEstimator):
             logger.warning('Some weights did not add up to one.')
 
         weights = np.repeat(weights[np.newaxis, ...], 3, axis=0)
-        print(weights)
 
         return np.average(self.points[:, idx], weights=weights, axis=-1)
 
@@ -113,20 +112,28 @@ class TreeLookup(PointLookup):
                  k_lookup: Optional[int] = None):
         super().__init__(response, energies, positions)
         self._kdtree = KDTree(self.response,
-                              leaf_size=128,
+                              leaf_size=256,
                               metric='euclidean')
 
         if k_lookup is None:
             # Find a very low amplitude point which will have high variance.
             # See how many points are needed to grab a roughly 3 sigma radius.
             amplitude = np.sum(self.response, axis=-1)
-            i = np.argmin(amplitude)
+            i = np.argsort(amplitude)[len(amplitude) // 20]
 
-            k_lookup = int(self._kdtree.query_radius([self.response[i]],
-                                                     3*np.sqrt(amplitude[i]/4),
-                                                     count_only=True)[0])
-            logger.info('Lookup set to %s points.', k_lookup)
+            test_value = self.response[i] + np.sqrt(self.response[i])/2
+            logger.info("Using test value %s", test_value)
+            k = np.repeat(test_value[np.newaxis, ...],
+                          self.response.shape[0], axis=0)
+            mu = self.response
+            p_log = -np.sum(np.abs(k - mu)**2 / (mu + 0.5), axis=-1)
+            p = np.exp(p_log)
 
+            k_lookup = 2 * np.sum(p >= 1e-3*np.nanmax(p))
+            logger.info('Lookup set to %d points (out of %d).',
+                        k_lookup, self.response.shape[0])
+
+        assert k_lookup is not None
         self.k_lookup = k_lookup
 
     @override
@@ -134,24 +141,31 @@ class TreeLookup(PointLookup):
         """Find closes indices in the KDtree."""
         observations = np.array(observations, dtype=np.int32)
 
-        self._idx = self._kdtree.query(observations, 64,
+        self._idx = self._kdtree.query(observations,
+                                       self.k_lookup,
                                        return_distance=False,
                                        sort_results=False)
         k = np.repeat(observations[..., np.newaxis, :],
                       np.shape(self._idx)[-1], axis=-2)
         mu = self.response[self._idx]
-        p = np.prod(poisson.pmf(k, mu), axis=-1)
+        p = np.exp(-np.sum(np.abs(k - mu)**2 / (mu + 0.5), axis=-1))
+        
+        no_good_fit = np.max(p, axis=-1) == 0
+        if np.sum(no_good_fit) > (1 + 0.05*len(no_good_fit)):
+            logger.warning("No good match for %d events.", np.sum(no_good_fit))
+        p[no_good_fit, :] = 1  # No close points
 
         logger.debug("Identifying observations: %s", observations)
         logger.debug("Identified calibration points: %s",
                      self.points[:, self._idx])
         logger.debug("Probabilities: %s", p)
 
-        incomplete_set = np.min(p, axis=-1) > 0.01 * np.max(p, axis=-1)
-        if np.any(incomplete_set):
-            logger.warning("Some measurements fit calibration poorly.")
-            logger.info("Max match at points: %s",
-                        observations[incomplete_set])
+        incomplete_set = np.nanmin(p, axis=-1) > 0.01 * np.nanmax(p, axis=-1)
+        if np.sum(incomplete_set) > (1 + 0.05*len(incomplete_set)):
+            logger.warning("Poor fit to calibration for %d of %d points.",
+                           np.sum(incomplete_set), len(incomplete_set))
+            logger.info("Incomplete set for %d points:\n%s",
+                        np.sum(incomplete_set), observations[incomplete_set])
 
         self._weights = p / np.sum(p, axis=-1)[..., np.newaxis]
 

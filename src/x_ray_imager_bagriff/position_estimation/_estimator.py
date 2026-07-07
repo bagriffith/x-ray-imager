@@ -21,7 +21,6 @@
 """The PointEstimator base class, inherited by each implementation."""
 import logging
 from pathlib import Path
-from typing import Union
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
@@ -85,6 +84,9 @@ class PointEstimator:
         # Load arrays
         self.response = np.array(response, dtype=np.float64)\
                             .reshape((-1, response_shape[-1]))
+        if np.any(self.response < 0):
+            logger.warning('Negative response provided.')
+
         self.points = np.append(np.array(energies, dtype=np.float64)\
                                     .reshape((1, -1)),
                                 np.array(positions, dtype=np.float64)\
