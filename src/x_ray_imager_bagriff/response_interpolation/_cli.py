@@ -139,9 +139,9 @@ def cli(files, lines, output, plot_diagnostics):
                                  for x in response_list])
 
     # Create the high resolution output grid
-    energy_hr = np.arange(10, 1000, 2, dtype=np.double)
-    x_hr = np.linspace(-70, 70, 141)
-    y_hr = np.linspace(-70, 70, 141)
+    energy_hr = np.arange(10, 700, 2, dtype=np.double)
+    x_hr = np.linspace(-70, 70, 71)
+    y_hr = np.linspace(-70, 70, 71)
     energy_mesh, x_mesh, y_mesh = np.meshgrid(energy_hr, x_hr, y_hr,
                                               indexing='ij')
 

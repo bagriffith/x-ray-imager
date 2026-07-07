@@ -224,12 +224,15 @@ class CubicInterpolation(Interpolation):
 
         self.grid_interp = \
             RegularGridInterpolator([energies, x, y], centers,
-                                    method='cubic',
-                                    bounds_error=False)
+                                    method='linear',
+                                    bounds_error=False,
+                                    fill_value=None)
         super().__init__(energies, positions, centers, **kwargs)
 
     def values(self, energy, x, y):
-        return self.grid_interp((energy, x, y))
+        prediction = self.grid_interp((energy, x, y))
+        prediction[prediction < 0.] = 0
+        return prediction
 
 
 class PCACleanedInterpolation(CubicInterpolation):
