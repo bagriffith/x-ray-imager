@@ -151,6 +151,10 @@ class MinOPTICS(KMeansMinMixin, OPTICS):
                 the KMeansMinMixin.
             kmeans_kwargs: Keyword arguments passed to KMeansMinMixin to
                 the sklearn.cluster.KMeans constructor.
+            min_cluster_size: int > 1 or float between 0 and 1.
+                Minimum number of samples in an OPTICS cluster, expressed as
+                an absolute number or a fraction of the number of samples. Not
+                just used for xi.
             **kwargs: Passed to the OPTICS constructor.
                 See sklearn.cluster.OPTICS for more details.
         """
@@ -158,6 +162,7 @@ class MinOPTICS(KMeansMinMixin, OPTICS):
             kmeans_kwargs = dict()
 
         self.kmeans_kwargs = kmeans_kwargs  # Needed for numpy
+        self.min_cluster_size = kwargs.get('min_cluster_size', 0)
         super().__init__(min_clusters, **kmeans_kwargs)
         super(KMeansMinMixin, self).__init__(**kwargs)
 
@@ -175,5 +180,24 @@ class MinOPTICS(KMeansMinMixin, OPTICS):
                 for consistency with Scikit-learn's clustering algorithms.
         """
         super().fit(X, y, **kwargs)
+        bin_size = np.bincount(self.labels_[self.labels_ >= 0])
+
+        min_cluster_size = self.min_cluster_size if (self.min_cluster_size > 1) \
+            else len(self.labels_)*self.min_cluster_size
+        is_small = bin_size < min_cluster_size
+        small_clusters = np.arange(len(bin_size))[is_small]
+        large_clusters = np.arange(len(bin_size))[~is_small]
+        logger.info('Dropping small clusters (%s or fewer entries): %s',
+                    int(min_cluster_size),
+                    ', '.join([f'{a:d} ({b:d})' for a, b in
+                     zip(small_clusters, bin_size[small_clusters])]))
+        for i in small_clusters:
+            # Move small clusters into the background.
+            self.labels_[self.labels_ == i] = -1
+
+        for i, j in zip(large_clusters, range(len(large_clusters))):
+            # Renumber the clusters
+            self.labels_[self.labels_ == i] = j
         self.fit_min(X, y)
         return self
+

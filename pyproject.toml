@@ -23,7 +23,6 @@ dependencies = [
   "pyYAML>=6.0.3",
   "scipy>=1.17.1",
   "scikit-learn>=1.8.0",
-  "tqdm>=4.68.3",
   "xraydb>=4.5.8"
 ]
 
@@ -38,3 +37,14 @@ Issues = "https://github.com/bagriffith/x-ray-imager/issues"
 [project.scripts]
 identify-lines = "x_ray_imager_bagriff.identify_lines._cli:cli"
 response-interpolation = "x_ray_imager_bagriff.response_interpolation._cli:cli"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.setuptools.package-data]
+x_ray_imager_bagriff = ["*.mplstyle"]
+

@@ -25,7 +25,6 @@ import click
 import matplotlib
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from x_ray_imager_bagriff.identify_lines import (
     MinOPTICS,
     SourceParams,
@@ -53,13 +52,16 @@ def set_log_level(ctx, param, value):
 
 def load_measurement_csv(filename):
     """Load a CSV of measurements.
-    
+
     Should have a one line header, then one measurement per row. Each
     column should be a detector in order. Values are expected to be integers
     that fit in a 32 bit signed int.
     """
     response = np.loadtxt(filename, delimiter=',', skiprows=1, dtype=np.long)
+
+    # Add this to only use a subset of the detections:
     # subset = np.random.choice(response.shape[0], 20_000, replace=False)
+
     return response
 
 
@@ -89,7 +91,7 @@ def cli():
               help="Print out all debug information during run.")
 def single(filename, source, gain, diagnostic, output):
     """Identify gamma source lines in FILENAME, a CSV of measurements.
-    
+
     A CSV of OUTPUT will be output with one line per row. The first column
     is the line energy, then one column for each detector.
     """
@@ -103,10 +105,20 @@ def single(filename, source, gain, diagnostic, output):
     # Currently there is no way to select the cluster that is used other than
     #   modifying this function. Frequently adjusting these settings would
     #   indicate that I should add an option for it.
-    # TODO: Explain scaling factors
+
+    # The events withing a distance r for events placed in the 4 detector
+    # space is r**4. Correct the radius limit by the inverse.
+    n_pts = events.shape[0]
+    logger.info("Using %s detections.", n_pts)
+
+    if source.name == 'Cd109':
+        n_pts /= 20  # Corrects small size of the peak at 88keV vs 22.5 keV
+
+
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=5.0 * np.max(source.energies)**0.5 \
-                                * events.shape[0]**(-0.333),
+                        max_eps=17.5 * n_pts**(-0.25),
+                        min_cluster_size=0.015,
+                        p=10,
                         cluster_method='dbscan')
 
     responses = find_lines(events,
@@ -134,7 +146,7 @@ def single(filename, source, gain, diagnostic, output):
 @click.option('--output', '-o',
               type=click.File(mode='w'), default='-',
               help="Output CSV path instead of stdout.")
-@click.option('--bar', '-b', is_flag=True,
+@click.option('--bar', '-b', 'use_bar', is_flag=True,
               help="Print extra information during run.")
 @click.option('--verbose', '-v', flag_value=logging.INFO,
               callback=set_log_level, expose_value=False,
@@ -142,15 +154,15 @@ def single(filename, source, gain, diagnostic, output):
 @click.option('--debug', '-d', flag_value=logging.DEBUG,
               callback=set_log_level, expose_value=False,
               help="Print out all debug information during run.")
-def multiple(filename, source, gain, output, bar):
+def multiple(filename, source, gain, output, use_bar):
     """Identify gamma source lines multiple times for multiple sets.
-    
+
     FILENAME should be a CSV with headers where each row being a single set of
     measurements. The only required column is "csv_path". That file should be
     compatable with the `single FILENAME` command. It may be an absolute path
     or relative to the working directory. Other columns will be caried to the
     output. This can be used for metadata like the position for that set.
-    
+
     The output will append n_detectors*n_lines columns. They're titled
     "<Line Energy> keV d<Detector Number>", with energy in keV to one decimal.
     Currently n_detectors is fixed equal to four.
@@ -161,9 +173,13 @@ def multiple(filename, source, gain, output, bar):
 
     n_pts = load_measurement_csv(df['csv_path'][0]).shape[0]
 
+    if source.name == 'Cd109':
+        n_pts /= 20
+
     cluster = MinOPTICS(min_clusters=len(source),
-                        max_eps=5.0 * np.max(source.energies)**0.5 \
-                                * n_pts**(-0.333),
+                        max_eps=17.5 * n_pts**(-0.25),
+                        min_cluster_size=0.015,
+                        p=10,
                         cluster_method='dbscan')
 
     n_detectors = 4  # This could be added as an option if needed.
@@ -172,23 +188,27 @@ def multiple(filename, source, gain, output, bar):
                  for n in range(n_detectors)]
 
     # For each file, load it
-    if bar:
-        tqdm.pandas()
-        df[line_cols] = df[['csv_path']].progress_apply(
-            lambda x: find_lines(load_measurement_csv(x['csv_path']),
-                                 cluster,
-                                 source,
-                                 gain_range=gain).flatten(),
-            axis=1,
-            result_type="expand")
+    def row_lines(row):
+        measurements = load_measurement_csv(row['csv_path'])
+        identified_lines = find_lines(measurements,
+                                      cluster,
+                                      source,
+                                      gain_range=gain)
+        return identified_lines.flatten()
+
+    if use_bar:
+        with click.progressbar(length=len(df),
+                               label="Identifying gamma lines",
+                               show_pos=True) as p_bar:
+            def f(row):
+                p_bar.update(1)
+                return row_lines(row)
+
+            df[line_cols] = df[['csv_path']].apply(f, axis=1,
+                                                   result_type="expand")
     else:
-        df[line_cols] = df[['csv_path']].apply(
-            lambda x: find_lines(load_measurement_csv(x['csv_path']),
-                                cluster,
-                                source,
-                                gain_range=gain).flatten(),
-            axis=1,
-            result_type="expand")
+        df[line_cols] = df[['csv_path']].apply(row_lines, axis=1,
+                                               result_type="expand")
 
     df.to_csv(output,
               index=False,

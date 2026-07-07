@@ -97,7 +97,7 @@ class SourceParams:
                    points: np.typing.ArrayLike,
                    gain: Optional[float] = None,
                    gain_range: Optional[tuple[float, float]] = None,
-                   bumper: Optional[float] = 1.5
+                   bumper: Optional[float] = 1.3
                    ) -> np.typing.NDArray[np.bool]:
         """Create a boolean array to remove points away from target energies.
 
