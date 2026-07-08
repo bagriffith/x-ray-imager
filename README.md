@@ -1,7 +1,7 @@
 # X-ray Imager Processing
 
 <!-- start overview -->
-This package contains three tools needed to calibrate and interpret
+This package contains three sets of tools needed to calibrate and interpret
 scintillator-based x-ray imagers.
 
 It is primarily for the [BOOMS](https://ssel.montana.edu/projects/booms.html)
@@ -21,7 +21,7 @@ algorithm separates source x-rays from background.
 There are two CLI tools under `identify-lines` for this calibration.
 
 - `single` processes a list of detected x-rays and returns a mean response to
-  each major energy lines. The source position should be constant.
+  each major energy line. The source position should be constant.
 - `multiple` processes several lists, returning the response for each. Use this
   to process a grid of calibration points.
 
@@ -33,12 +33,13 @@ for the response at intermediate positions/energies. The CLI for this is
 
 ### Position Estimation
 
-This is a work in progress. It should take an expected calibration response
-and a list of measured x-rays and return a list of expected x-ray
-positions/energies. This may also include uncertainties.
+A series of x-ray imager observations will have an estimated position and energy
+assigned based on an interpolated calibration response. The CLI for this is
+`position-estimation`.
 
 ## Installation
 
+<!-- start installation -->
 Installation has only been tested on Ubuntu 24.04 with Python 3.12 but should
 be compatible with most systems. To install the current version, run the
 command below.
@@ -46,3 +47,4 @@ command below.
 ```bash
 pip install https://github.com/bagriffith/x-ray-imager/archive/refs/heads/main.zip
 ```
+<!-- end installation -->

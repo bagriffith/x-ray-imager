@@ -34,8 +34,7 @@ class PointEstimator:
         short_name: A string of a name that should be used for the method
             implemented in each subclass.
         response: An NDArray[float] with the expected responses for each point.
-        energies: An NDArray[float] with the energy of the points.
-        positions: An NDArray[float] with the position of the points.
+        points: An NDArray[float] with the energy, x, y of the points.
     """
     short_name = 'base'
 
@@ -48,9 +47,11 @@ class PointEstimator:
         Args:
             response: Expected responses for an array of points.
                 The array can be any shape that matches the energies
-                and positions: (*shape of measurements, n detectors).
-            points: Array  with axis 0 having eenergy, x and y of samples.
-                Shape is (3, *shape of measurements)
+                and positions: ``(*shape of measurements, n detectors)``.
+            energies: Array with energies of samples. Shape is
+                ``(*shape of measurements)`` 
+            positions: Array with axis 0 having x and y of samples.
+                Shape is ``(2, *shape of measurements)``.
         """
         # Check input array shapes
         response_shape = np.shape(response)
@@ -103,11 +104,11 @@ class PointEstimator:
         Args:
             observations: Measurements from the x-ray imager. Can be any
                 shape, but the last dimmention must have n_detectors elements.
-                Shape is (*any_measurements_shape, n_detectors)
+                Shape is ``(*any_measurements_shape, n_detectors)``.
         
         Returns:
             An array of the estimated energy, x, and y. Shape is
-            (3, *any_measurements_shape).
+            ``(3, *any_measurements_shape)``.
         """
         logger.warning("Unimplemented base estimator is being called.")
         return np.full((3, *np.shape(observations)[:-1]), np.nan)
@@ -128,7 +129,7 @@ class PointEstimator:
     def save_to(self, path: str|Path):
         """Save this estimator to a file to be reloaded later.
 
-        This method should be undone by `load_from(path)`. If not overridden,
+        This method should be undone by ``load_from(path)``. If not overridden,
         the input response arrays will be saved in the "npz" format to be
         reloaded by the initializer. For subclasses where this is an expensive
         operation, this method could be used to save an intermediate result
@@ -146,7 +147,7 @@ class PointEstimator:
 
     @classmethod
     def load_from(cls, path: str|Path):
-        """Reloads the estimator from a file made using `save_to(path)`."""
+        """Reloads the estimator from a file made using ``save_to(path)``."""
         loaded = np.load(str(path))
 
         if loaded['name'][0] != cls.short_name:
@@ -164,5 +165,5 @@ class PointEstimator:
 
     @property
     def positions(self) -> NDArray[np.float64]:
-        """Returns the energy component of points."""
+        """Returns the position components of points."""
         return self.points[1:]

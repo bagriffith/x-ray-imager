@@ -55,11 +55,11 @@ class PointLookup(PointEstimator):
         return a weight for each point. All weights for an observation should
         sum to one.
         
-        Both arrays should have shape (*any_measurements_shape, n_indices).
+        Both arrays should have shape ``(*any_measurements_shape, n_indices)``.
 
         Args:
              observations: See get_value.
-                Shape should be (*any_measurements_shape, n_detectors).
+                Shape should be ``(*any_measurements_shape, n_detectors)``.
 
         Returns:
             A tuple of two arrays. The first is a set of indices for close
@@ -149,7 +149,7 @@ class TreeLookup(PointLookup):
                       np.shape(self._idx)[-1], axis=-2)
         mu = self.response[self._idx]
         p = np.exp(-np.sum(np.abs(k - mu)**2 / (mu + 0.5), axis=-1))
-        
+
         no_good_fit = np.max(p, axis=-1) == 0
         if np.sum(no_good_fit) > (1 + 0.05*len(no_good_fit)):
             logger.warning("No good match for %d events.", np.sum(no_good_fit))

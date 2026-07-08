@@ -31,18 +31,21 @@ def anger_basis(X: ArrayLike  # pylint: disable=invalid-name
                            NDArray[np.double]]:
     """Simple Anger imager positioning algorithm.
 
-    x = sum(detectors_plus_x) - sum(detectors_minus_x)
-    y = sum(detectors_plus_y) - sum(detectors_minus_y)
-    an then normalized by the sum of all detectore
+    Example::
+
+        x = sum(detectors_plus_x) - sum(detectors_minus_x)
+        y = sum(detectors_plus_y) - sum(detectors_minus_y)
+        an then normalized by the sum of all detectore
     
-    It is assumed here that the detectors are numbered
+    It is assumed here that the detectors are numbered::
+
             +y
         (2) | (1)
         ----+---- +x
         (3) | (0)
     
     Args:
-        X: Array of measurements. Shape is (n events, n detectors).
+        X: Array of measurements. Shape is ``(n events, n detectors)``.
 
     Returns:
         Tuple of three arrays. The amplitude, sum of all detectors.

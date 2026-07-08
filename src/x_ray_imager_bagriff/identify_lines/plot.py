@@ -20,9 +20,15 @@
 
 """Creates diagnostic plots for visualizing imager event groupings.
 
-Typical usage example:
+Example:
+
+  Load an event list and use the clustering algorithm to label each::
+
     data = np.loadtxt("imager-event-list.txt")
     group_ids = cluster_method.fit(data)
+
+  Then create a diagnostic and use it to plot the labels::
+
     diagnostic = FullDiagnostic()
     diagnostic.plot_diagnostic(data, group_ids)
     diagnostic.savefig('diagnostic.png')

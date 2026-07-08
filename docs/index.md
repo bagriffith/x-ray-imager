@@ -8,6 +8,7 @@
 ```{toctree}
 :maxdepth: 2
 
+installation
 identify-lines/index
 response-interpolation/index
 position-estimation/index

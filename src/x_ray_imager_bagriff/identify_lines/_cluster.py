@@ -60,7 +60,8 @@ class KMeansMinMixin:
         """Check if the min number of clusters is met, and apply K-means if not.
         
         This should be called in the subclass after that clustering is
-        completed. For example:
+        completed. For example::
+
             super().fit(X, y, **kwargs)
             self.fit_min(X, y, **kwargs)
         

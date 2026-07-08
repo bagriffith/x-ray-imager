@@ -1,10 +1,12 @@
 # Position Estimation
 
-This component is still a work in progress.
+```{eval-rst}
+.. automodule:: x_ray_imager_bagriff.position_estimation
+```
 
 ```{toctree}
 :titlesonly:
-:glob:
 
-*
+estimators
+cli
 ```

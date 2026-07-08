@@ -1,8 +1,15 @@
 # Identify Lines
 
+```{eval-rst}
+.. automodule:: x_ray_imager_bagriff.identify_lines
+```
+
 ```{toctree}
 :titlesonly:
-:glob:
 
-*
+cli
+source
+identify
+cluster
+plot
 ```

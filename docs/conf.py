@@ -14,13 +14,17 @@ sys.path.insert(0, str(Path('..', 'src').resolve()))
 project = 'X-ray Imager Processing'
 copyright = '2026, Brady Griffith'
 author = 'Brady Griffith'
-release = '0.1.0'
+release = '0.2.0.dev'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
 extensions = ['sphinx.ext.napoleon',
-              'myst_parser']
+              'sphinx.ext.intersphinx',
+              'myst_parser',
+              'sphinx_click',
+              'matplotlib.sphinxext.roles'
+              ]
 
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
@@ -28,8 +32,18 @@ source_suffix = {
     '.md': 'markdown',
 }
 
+intersphinx_mapping = {'python': ('https://docs.python.org/3', None),
+                       'numpy': ('https://numpy.org/doc/stable/', None),
+                       'numpy': ('https://numpy.org/doc/stable/', None),
+                       'scipy': ('https://docs.scipy.org/doc/scipy/', None),
+                       'matplotlib': ('https://matplotlib.org/stable', None)}
+
 # -- Napoleon settings -------------------------------------------------------
 napoleon_google_docstring = True
+
+
+autodoc_typehints = "description"
+autodoc_class_signature = "separated"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output

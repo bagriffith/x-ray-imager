@@ -20,15 +20,20 @@
 
 """Tools to find the response for each gamma line from a source.
 
-Typical usage example:
+Example:
+
+  Load an event list, choose a clustering algorithm, and identify the
+  specific gamma source::
 
     data = np.loadtxt("imager-event-list.txt")
     cluster_method = sklearn.cluster.KMeans()  # Or some other algorithm
     source = SourceParams.get_source('Am241')
 
-    responses = find_lines(data, cluster_method, source, (1.0, 4.0))
-    for i in range(responses.shape[0]):
-        print(f"Line {i}: {responses[i,:]}")
+  Then identify that sources lines::
+
+    responses = find_lines(data, cluster_method, source, gain_range=(1.0, 4.0))
+    for i, line in enumerate(responses):
+        print(f"Line {i}: {line}")
 """
 import logging
 from typing import Optional
