@@ -1,0 +1,116 @@
+# Copyright (c) 2026 Brady Griffith
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+"""Test x-ray imager plotting tools."""
+import pytest
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.collections import QuadMesh
+from matplotlib.container import BarContainer
+from matplotlib.patches import Polygon
+from x_ray_imager_bagriff.position_estimation.plot import (
+    ImagerAxes,
+    ImagerFigure, SpectrumFigure, ImageHistFigure, ImageSpectrumFigure,
+    ImagerAnimation  # TODO Add test for this.
+)
+
+# For pytest fixtures
+# pylint: disable=redefined-outer-name
+# pylint: disable=protected-access
+
+
+@pytest.fixture
+def example_imager_data():
+    """Example observation position and energy arrays."""
+    n_points = 2048
+    x = np.random.normal(25.0, 20.0, n_points)
+    y = np.random.normal(-10.0, 20.0, n_points)
+    energy = 600 * np.random.beta(2, 5, n_points)
+    return energy, x, y
+
+
+def test_energy_spectrum(tmp_path, example_imager_data):
+    """Test ``ImagerAxes.energy_spectrum()``."""
+    energy, x, y = example_imager_data
+    _ = x, y
+
+    fig = plt.figure(layout='constrained')
+    ax = fig.add_subplot(axes_class=ImagerAxes)
+    result = ax.energy_spectrum(energy)  # type: ignore
+
+    assert isinstance(result, (BarContainer, Polygon, list))
+    if isinstance(result, list):
+        assert all(isinstance(r, (BarContainer, Polygon)) for r in result)
+
+    save_path = tmp_path / 'energy_spectrum.png'
+    fig.savefig(save_path)
+    assert save_path.exists()
+
+    plt.close(fig)
+
+
+def test_image_hist(tmp_path, example_imager_data):
+    """Test ``ImagerAxes.image_hist()``."""
+    energy, x, y = example_imager_data
+    _ = energy
+
+    fig = plt.figure(layout='constrained')
+    ax = fig.add_subplot(axes_class=ImagerAxes)
+    result = ax.image_hist(x, y)  # type: ignore
+
+    assert isinstance(result, QuadMesh)
+
+    save_path = tmp_path / 'image_hist.png'
+    fig.savefig(save_path)
+    assert save_path.exists()
+
+    plt.close(fig)
+
+
+def test_filter_by_energy(example_imager_data):
+    """Test ``ImagerFigure._filter_by_energy()``."""
+    energy, x, y = example_imager_data
+
+    # Define an energy range
+    energy_range = (100.0, 300.0)
+
+    # Filter the data
+    filtered_x, filtered_y = \
+        ImagerFigure._filter_by_energy(energy, x, y, energy_range)
+
+    in_range = (energy > energy_range[0]) & (energy < energy_range[1])
+
+    # Verify that the filtered data is within the energy range
+    assert np.all(x[in_range] == filtered_x)
+    assert np.all(y[in_range] == filtered_y)
+
+
+def test_imager_figures(tmp_path, example_imager_data):
+    """Test ``SpectrumFigure.plot_observations()``."""
+    energy, x, y = example_imager_data
+
+    for fig_class in [SpectrumFigure, ImageHistFigure, ImageSpectrumFigure]:
+        fig = fig_class(figsize=(8, 8))
+        fig.plot_observations(energy, x, y, duration=1.0)
+
+        save_path = tmp_path / f'{type(fig).__name__}.png'
+        fig.savefig(save_path)
+        assert save_path.exists()
+        plt.close(fig)

@@ -7,6 +7,7 @@
 ```{toctree}
 :titlesonly:
 
-estimators
 cli
+estimators
+plot
 ```
