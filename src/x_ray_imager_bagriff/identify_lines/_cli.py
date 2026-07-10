@@ -31,6 +31,7 @@ from x_ray_imager_bagriff.identify_lines import (
     find_lines
 )
 from x_ray_imager_bagriff.identify_lines.plot import diagnostics
+from x_ray_imager_bagriff.cli import log_level_options
 
 logger = logging.getLogger('x_ray_imager_bagriff.identify_lines')
 
@@ -38,16 +39,6 @@ matplotlib.use('Agg')
 
 SOURCE_CHOICE = click.Choice(SourceParams.source_choices())
 DIAGNOSTIC_CHOICE = click.Choice([None] + list(diagnostics.keys()))
-
-
-def set_log_level(ctx, param, value):
-    """Update the log level according to a CLI value."""
-    _ = ctx, param  # Not needed.
-    if value is None:
-        return
-    logger.setLevel(value)
-    handler = logging.StreamHandler()
-    logger.addHandler(handler)
 
 
 def load_measurement_csv(filename):
@@ -83,12 +74,7 @@ def cli():
 @click.option('--output', '-o',
               type=click.File(mode='w'), default='-',
               help="Output CSV path instead of stdout.")
-@click.option('--verbose', '-v', flag_value=logging.INFO,
-              callback=set_log_level, expose_value=False,
-              help="Print extra information during run.")
-@click.option('--debug', '-d', flag_value=logging.DEBUG,
-              callback=set_log_level, expose_value=False,
-              help="Print out all debug information during run.")
+@log_level_options(logger)
 def single(filename, source, gain, diagnostic, output):
     """Identify gamma source lines in FILENAME, a CSV of measurements.
 
@@ -148,12 +134,7 @@ def single(filename, source, gain, diagnostic, output):
               help="Output CSV path instead of stdout.")
 @click.option('--bar', '-b', 'use_bar', is_flag=True,
               help="Print extra information during run.")
-@click.option('--verbose', '-v', flag_value=logging.INFO,
-              callback=set_log_level, expose_value=False,
-              help="Print extra information during run.")
-@click.option('--debug', '-d', flag_value=logging.DEBUG,
-              callback=set_log_level, expose_value=False,
-              help="Print out all debug information during run.")
+@log_level_options(logger)
 def multiple(filename, source, gain, output, use_bar):
     """Identify gamma source lines multiple times for multiple sets.
 

@@ -28,18 +28,9 @@ from x_ray_imager_bagriff.response_interpolation import (
     CubicInterpolation,
     plot
 )
+from x_ray_imager_bagriff.cli import log_level_options
 
 logger = logging.getLogger('x_ray_imager_bagriff.identify_lines')
-
-
-def set_log_level(ctx, param, value):
-    """Update the log level according to a CLI value."""
-    _ = ctx, param  # Not needed.
-    if value is None:
-        return
-    logger.setLevel(value)
-    handler = logging.StreamHandler()
-    logger.addHandler(handler)
 
 
 @click.command()
@@ -53,12 +44,7 @@ def set_log_level(ctx, param, value):
               help="Output path instead of stdout.")
 @click.option('--diagnostics', '-p', 'plot_diagnostics', is_flag=True,
               help="Save diagnostic plots.")
-@click.option('--verbose', '-v', flag_value=logging.INFO,
-              callback=set_log_level, expose_value=False,
-              help="Print extra information during run.")
-@click.option('--debug', '-d', flag_value=logging.DEBUG,
-              callback=set_log_level, expose_value=False,
-              help="Print out all debug information during run.")
+@log_level_options(logger)
 @click.version_option(message="%(prog)s from %(package)s, version %(version)s")
 def cli(files, lines, output, plot_diagnostics):
     """Collects a set of gamma line responses and outputs an interpolated grid.
