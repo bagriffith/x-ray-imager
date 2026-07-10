@@ -25,6 +25,7 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import QuadMesh
 from matplotlib.container import BarContainer
 from matplotlib.patches import Polygon
+import pandas as pd
 from x_ray_imager_bagriff.position_estimation.plot import (
     ImagerAxes,
     ImagerFigure, SpectrumFigure, ImageHistFigure, ImageSpectrumFigure,
@@ -51,7 +52,8 @@ def test_energy_spectrum(tmp_path, example_imager_data):
     energy, x, y = example_imager_data
     _ = x, y
 
-    fig = plt.figure(layout='constrained')
+    plt.rcParams['text.usetex'] = True  # Needed for axis labels
+    fig = plt.figure()
     ax = fig.add_subplot(axes_class=ImagerAxes)
     result = ax.energy_spectrum(energy)  # type: ignore
 
@@ -71,7 +73,7 @@ def test_image_hist(tmp_path, example_imager_data):
     energy, x, y = example_imager_data
     _ = energy
 
-    fig = plt.figure(layout='constrained')
+    fig = plt.figure()
     ax = fig.add_subplot(axes_class=ImagerAxes)
     result = ax.image_hist(x, y)  # type: ignore
 
@@ -114,3 +116,20 @@ def test_imager_figures(tmp_path, example_imager_data):
         fig.savefig(save_path)
         assert save_path.exists()
         plt.close(fig)
+
+
+def test_animation(tmp_path, example_imager_data):
+    """Test ``ImagerAnimation``."""
+    energy, x, y = example_imager_data
+    df = pd.DataFrame({'energy': np.repeat(energy, 3),
+                       'x': np.repeat(x, 3),
+                       'y': np.repeat(y, 3),
+                       't': np.repeat(np.arange(3), len(x))})
+
+    fig = ImageSpectrumFigure()
+    anim = ImagerAnimation(fig=fig, df=df, step_duration=1.0)
+
+    save_path = tmp_path / 'animation.mp4'
+    anim.save(filename=save_path, writer="ffmpeg")
+
+    assert save_path.exists()

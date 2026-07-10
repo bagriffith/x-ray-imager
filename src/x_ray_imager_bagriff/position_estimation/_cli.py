@@ -21,22 +21,16 @@
 """Command line interface to estimate position/energy for an x-ray imager."""
 import csv
 import logging
+from pathlib import Path
 import click
 import numpy as np
 import pandas as pd
-from x_ray_imager_bagriff.position_estimation import TreeLookup
+from x_ray_imager_bagriff.position_estimation import TreeLookup, plot
+from x_ray_imager_bagriff.cli import log_level_options
 
 logger = logging.getLogger('x_ray_imager_bagriff.position_estimation')
 
-
-def set_log_level(ctx, param, value):
-    """Update the log level according to a CLI value."""
-    _ = ctx, param  # Not needed.
-    if value is None:
-        return
-    logger.setLevel(value)
-    handler = logging.StreamHandler()
-    logger.addHandler(handler)
+PLOT_CHOICE = click.Choice(plot.figure_names.keys())
 
 
 @click.group()
@@ -54,12 +48,7 @@ def cli():
               help="Output CSV path instead of stdout.")
 @click.option('--threshold', type=click.IntRange(min=0), default=15,
               help="Minimum sum of detector values to output.")
-@click.option('--verbose', '-v', flag_value=logging.INFO,
-              callback=set_log_level, expose_value=False,
-              help="Print extra information during run.")
-@click.option('--debug', '-d', flag_value=logging.DEBUG,
-              callback=set_log_level, expose_value=False,
-              help="Print out all debug information during run.")
+@log_level_options(logger)
 def series(calibration, observations, output, threshold):
     """Estimate the position and energy for a list of observations.
     
@@ -105,3 +94,84 @@ def series(calibration, observations, output, threshold):
                             header=False,
                             index=False,
                             quoting=csv.QUOTE_NONNUMERIC)
+
+
+@cli.command("plot")
+@click.argument('observations', type=click.File())
+@click.argument('figure', type=PLOT_CHOICE)
+@click.option('--output', '-o', default=Path("./plot.png"),
+              type=click.Path(file_okay=True, dir_okay=False),
+              help="Output plot path. Any type supported by matplotlib.")
+@click.option('--energy', '-e', 'energy_range', nargs=2,
+              type=click.FloatRange(min=0),
+              help="Only use x-rays in this energy band for position plots.")
+@log_level_options(logger)
+def plot_fig(observations, figure, output, energy_range):
+    """Plot a set of x-ray positions and/or energies.
+
+    OBSERVATIONS is a CSV with each row being a single observed x-ray.
+    It should have columns 'energy', 'x', and 'y'. FIGURE is the selected
+    plot type. All energies should be in keV and lengths in mm.
+    """
+    df = pd.read_csv(observations)
+
+    figsize = (6.5, {'spectrum': 4.0, 'image': 5.0, 'both': 8}[figure])
+    fig = plot.figure_names[figure](figsize=figsize, image_max=400)
+    fig.plot_observations(df['energy'], df['x'], df['y'],
+                          energy_range=energy_range)
+    fig.savefig(output)
+
+
+@cli.command()
+@click.argument('observations', type=click.File())
+@click.argument('figure', type=PLOT_CHOICE)
+@click.option('--output', '-o', default=Path("./imager.mp4"),
+              type=click.Path(file_okay=True, dir_okay=False),
+              help="Output animation plot with a file type supported by "
+                   "matplotlib's FFMpegWriter.")
+@click.option('--step', '-s', 'step_duration',
+              type=click.FloatRange(min=0), default=10.0,
+              help="Observation time for each frame, in seconds.")
+@click.option('--energy', '-e', 'energy_range', nargs=2,
+              type=click.FloatRange(min=0),
+              help="Only use x-rays in this energy band for position plots.")
+@click.option('--interval', '-i', 'frame_interval',
+              type=click.IntRange(min=1), default=100,
+              help="Frame duration in the final video.")
+@click.option('--maxspectrum', 'max_spectrum',
+              type=click.FloatRange(min=0, min_open=True),
+              help="Max on the energy spectrum y-axis (x-rays / keV.s).")
+@click.option('--maximage', 'max_image',
+              type=click.FloatRange(min=0, min_open=True),
+              help="Max on the image colormap (x-rays / bin).")
+@log_level_options(logger)
+def animation(observations, figure, output, step_duration, frame_interval,
+              energy_range, max_spectrum, max_image):
+    """Animate a time series of x-ray positions and/or energies.
+    
+    Uses the same figures as the ``plot`` command for each frame.
+    OBSERVATIONS should be a CSV with columns 'energy', 'x', 'y', and 't'.
+    All times are in seconds.
+    """
+    df = pd.read_csv(observations)
+    if '#t' in df:
+        df['t'] = df['#t']
+
+    figsize = (6.5, {'spectrum': 4.0, 'image': 5.0, 'both': 8}[figure])
+    fig = plot.figure_names[figure](figsize=figsize,
+                                    spectrum_max=max_spectrum,
+                                    image_max=max_image)
+
+    anim = plot.ImagerAnimation(fig=fig, df=df,
+                                step_duration=step_duration,
+                                energy_range=energy_range,
+                                interval=frame_interval)
+
+    # The total number of frames:
+    steps = int(df['t'].max() // pd.Timedelta(step_duration, 's'))
+
+    # Override the animation iterator with the progressbar
+    # pylint: disable=protected-access
+    with click.progressbar(anim._framedata, length=steps) as bar_fd:
+        anim._framedata = bar_fd  # type: ignore
+        anim.save(filename=output, writer="ffmpeg")
