@@ -8,6 +8,8 @@ It is primarily for the [BOOMS](https://ssel.montana.edu/projects/booms.html)
 imagers. They use a monolithic NaI(Tl) crystal read out by four square
 photomultiplier tubes. In places, this package assumes this geometry, but
 comments indicate where.
+
+[Documentation](https://x-ray-imager.github.bradyagriffith.com/)
 <!-- end overview -->
 
 ## Component Overview
@@ -33,9 +35,9 @@ for the response at intermediate positions/energies. The CLI for this is
 
 ### Position Estimation
 
-A series of x-ray imager observations will have an estimated position and energy
-assigned based on an interpolated calibration response. The CLI for this is
-`position-estimation`.
+A series of x-ray imager observations will have an estimated position and
+energy assigned based on an interpolated calibration response. The CLI for
+this is `position-estimation`.
 
 ## Installation
 
