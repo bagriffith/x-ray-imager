@@ -74,19 +74,26 @@ def series(calibration, observations, output, threshold):
     n_detectors = 4
     det_cols = [f'T{i+1}' for i in range(n_detectors)]
     est_cols = ['energy', 'x', 'y']
-    columns = ['#t', *det_cols, *est_cols]
+    error_cols = ['d_energy', 'd_x', 'd_y']
+    columns = ['t', *det_cols, *est_cols]
 
     # Write header
     output.write(','.join(columns) + '\n')
 
     with click.progressbar(obs_df, show_percent=True) as progress_bar:
         for df_chunk in progress_bar:
+            if '#t' in df_chunk:
+                df_chunk['t'] = df_chunk['#t']
+
             amp = np.sum(df_chunk[det_cols].to_numpy(), axis=-1)
             df_chunk = df_chunk[amp > threshold]
 
             logger.info("Processing %d observations.", len(df_chunk))
 
-            df_chunk[est_cols] = estimator.get_value(df_chunk[det_cols]).T
+            # df_chunk[est_cols] = estimator.get_value(df_chunk[det_cols]).T
+            df_chunk[est_cols], df_chunk[error_cols] = \
+                (x.T
+                 for x in estimator.get_values_with_error(df_chunk[det_cols]))
 
             df_chunk.to_csv(output,
                             columns=columns,
