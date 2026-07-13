@@ -1,6 +1,6 @@
 [project]
 name = "x_ray_imager_bagriff"
-version = "0.2.0"
+version = "0.3.0.dev0"
 authors = [
   { name="Brady Griffith", email="bagriff@uw.edu" },
 ]

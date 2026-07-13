@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path('..', 'src').resolve()))
 project = 'X-ray Imager Processing'
 copyright = '2026, Brady Griffith'
 author = 'Brady Griffith'
-release = '0.2.0'
+release = '0.3.0.dev0'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
