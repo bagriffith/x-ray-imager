@@ -20,11 +20,10 @@
 
 """Interpolate between calibration source positions and energies."""
 import logging
-from typing import Optional
-from scipy.interpolate import RegularGridInterpolator, make_interp_spline
+from typing import Optional, override
+from scipy.interpolate import RegularGridInterpolator
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-import xraydb
 from x_ray_imager_bagriff.response_interpolation import pca
 from x_ray_imager_bagriff.response_interpolation.plot import (
     GenericResponseDiagnostic)
@@ -38,14 +37,21 @@ class Interpolation:
     This is intended to produce the best estimate of what the mean response
     from the imager would be for a given x-ray position and energy. Specific
     implementation is left for inherited classes.
+
+    Attributes:
+        points:
+        responses:
+        positions:
+        energies:
     """
+    short_name = 'default'
+    uses_basis = False
+
     def __init__(self,
                  energies: ArrayLike,
                  positions: ArrayLike,
                  responses: ArrayLike,
-                 input_diagnostic: Optional[GenericResponseDiagnostic] = None,
-                 output_diagnostic: Optional[GenericResponseDiagnostic] = None,
-                 error_diagnostic: Optional[GenericResponseDiagnostic] = None
+                 input_diagnostic: Optional[GenericResponseDiagnostic] = None
                  ) -> None:
         """Initialize the interpolation.
 
@@ -59,33 +65,27 @@ class Interpolation:
                 position used in calibration. Shape should be
                 (n_energies, n_x_positions, n_y_positions, n_detectors)
             input_diagnostic: Diagnostic plot of the calibration responses.
-            output_diagnostic: Diagnostic plot to use for the predicted output
-                at each calibration point and the specified energy.
-            error_diagnostic: Diagnostic plot of the difference between
-                responses from calibration and the prediction.
         """
         self._check_shape(energies, positions, responses)
-        energies = np.array(energies, dtype=np.double)
-        positions = np.array(positions, dtype=np.double)
-        responses = np.array(responses, dtype=np.double)
+        self.energies = np.array(energies, dtype=np.double)
+        self.positions = np.array(positions, dtype=np.double)
+        self.responses = np.array(responses, dtype=np.double)
 
         if input_diagnostic is not None:
-            for response, energy in zip(responses, energies):
-                input_diagnostic.plot_diagnostic(response, positions)
+            for response, energy in zip(self.responses, self.energies):
+                input_diagnostic.plot_diagnostic(response, self.positions)
                 input_diagnostic.savefig(f'in-{energy:.1f}'.replace('.', '_')
                                          + 'keV.png', dpi=300)
 
-        max_error = 0.
-        mean_error = 0.
+    @property
+    def x(self):
+        """TODO"""
+        return self.positions[0]
 
-        for response, energy in zip(responses, energies):
-            # For each energy calibration, check how accurately it's reproduced
-            max_error_e, mean_error_e = \
-                self.validate(energy, positions, response,
-                              error_diagnostic=error_diagnostic,
-                              output_diagnostic=output_diagnostic)
-            max_error = max(max_error, max_error_e)
-            mean_error += mean_error_e/len(energies)
+    @property
+    def y(self):
+        """TODO"""
+        return self.positions[1]
 
     def __call__(self, *args, **kwargs):
         return self.values(*args, **kwargs)
@@ -111,9 +111,6 @@ class Interpolation:
         return np.full_like(energy, np.nan)
 
     def validate(self,
-                 energy: float,
-                 positions: NDArray[np.double],
-                 responses: NDArray[np.double],
                  output_diagnostic: Optional[GenericResponseDiagnostic] = None,
                  error_diagnostic: Optional[GenericResponseDiagnostic] = None
                  ) -> tuple[float, float]:
@@ -132,41 +129,53 @@ class Interpolation:
             responses and the predicted output for the same energies and
             positions.
         """
-        interp_centers = self(np.full(positions.shape[1:], energy),
-                              positions[0, :, :],
-                              positions[1, :, :])
+        x_mesh, y_mesh = np.meshgrid(*[np.linspace(-70, 70, 71)]*2)
 
-        errors = interp_centers - responses
+        max_error = 0.
+        mean_error = 0.
 
-        x_hr = np.linspace(np.min(positions[0, :, :]),
-                           np.max(positions[0, :, :]), 70)
-        y_hr = np.linspace(np.min(positions[1, :, :]),
-                           np.max(positions[1, :, :]), 70)
+        for energy, response in zip(self.energies, self.responses):
+            predicted_response = self(np.full_like(self.positions[0], energy),
+                                      self.positions[0],
+                                      self.positions[1])
 
-        if output_diagnostic is not None:
-            x_mesh, y_mesh = np.meshgrid(x_hr, y_hr)
-            e_mesh = np.full_like(x_mesh, energy)
-            z_mesh = self(e_mesh, x_mesh, y_mesh)
-            output_diagnostic.plot_diagnostic(z_mesh,
-                                              np.array([x_mesh, y_mesh]))
-            output_diagnostic.savefig(f'out-{energy:.1f}'.replace('.', '_')
-                                      + 'keV.png', dpi=300)
+            if output_diagnostic is not None:
+                output_diagnostic.plot_diagnostic(
+                    self(np.full_like(x_mesh, energy), x_mesh, y_mesh),
+                    np.array([x_mesh, y_mesh], dtype=np.float64)
+                )
 
-        if error_diagnostic is not None:
-            error_diagnostic.plot_diagnostic(errors, positions)
-            error_diagnostic.savefig(f'error-{energy:.1f}'.replace('.', '_')
-                                     + 'keV.png', dpi=300)
+                output_diagnostic.savefig(
+                    f'out-{energy:.1f}'.replace('.', '_') + 'keV.png',
+                    dpi=300
+                )
 
-        max_error = np.max(np.abs(errors))
-        mean_error = float(np.mean(np.abs(errors)))
+            error = predicted_response - response
 
-        logger.info('Interpolation Statistics for %.1f keV:', energy)
-        logger.info('  Mean Error: %.2f', mean_error)
-        logger.info('  Max Error: %.2f', max_error)
-        if mean_error > 4.0:
-            # Somewhat arbitrary threshold. An error < 1.0 should be harmless.
-            logger.warning('Mean error for %s keV is high: %.2f',
-                           energy, mean_error)
+            if error_diagnostic is not None:
+                error_diagnostic.plot_diagnostic(
+                    error,
+                    self.positions
+                )
+
+                error_diagnostic.savefig(
+                    f'error-{energy:.1f}'.replace('.', '_') + 'keV.png',
+                    dpi=300
+                )
+
+            max_error_pt = np.max(np.abs(error))
+            max_error = max(max_error, max_error_pt)
+            mean_error_pt = float(np.mean(np.abs(error)))
+            mean_error += mean_error_pt / len(self.energies)
+
+            logger.info('Interpolation Statistics for %.1f keV:', energy)
+            logger.info('  Mean Error: %.2f', mean_error_pt)
+            logger.info('  Max Error: %.2f', max_error_pt)
+
+            if mean_error_pt > 4.0:
+                # Somewhat arbitrary threshold. An error < 1.0 should be harmless.
+                logger.warning('Mean error for %s keV is high: %.2f',
+                               energy, mean_error_pt)
 
         return max_error, mean_error
 
@@ -211,145 +220,186 @@ class Interpolation:
                            responses_shape[3])
 
 
-class CubicInterpolation(Interpolation):
-    def __init__(self, energies, positions, centers, **kwargs):
-        ind = np.argsort(energies)
-        energies = np.array(energies)[ind]
-        centers = centers[ind, :, :, :]
-        positions = np.array(positions)
-        logging.debug(energies)
-        # TODO, test that grid is rectangular
-        x = positions[0, :, 0].copy()
-        y = positions[1, 0, :].copy()
+class LinearInterpolation(Interpolation):
+    """Linearly interpolate responses in both energy and postion."""
+    short_name = 'linear'
+    uses_basis = False
+
+    @override
+    def __init__(self, *args, **kwargs):
+        """Initialize the interpolator, creating a scipy interpolator."""
+        super().__init__(*args, **kwargs)
+
+        sorted_index = np.argsort(self.energies)
+        self.points = self.energies[sorted_index, ...]
+        self.responses = self.responses[sorted_index, :, :, :]
+        logging.debug(self.energies)
+
+        if not np.allclose(self.positions,
+                           np.meshgrid(self.x[:, 0],
+                                       self.y[0, :],
+                                       indexing='ij')):
+            raise ValueError('Calibrations must use an even grid.')
 
         self.grid_interp = \
-            RegularGridInterpolator([energies, x, y], centers,
+            RegularGridInterpolator([self.energies,
+                                     self.x[:, 0],
+                                     self.y[0, :]],
+                                    self.responses,
                                     method='linear',
                                     bounds_error=False,
-                                    fill_value=None)
-        super().__init__(energies, positions, centers, **kwargs)
+                                    fill_value=None) # type: ignore
 
+    @override
     def values(self, energy, x, y):
         prediction = self.grid_interp((energy, x, y))
         prediction[prediction < 0.] = 0
         return prediction
 
 
-class PCACleanedInterpolation(CubicInterpolation):
-    def __init__(self, energies, positions, centers, basis):
-        cleaned_centers = basis.T @ (basis @ centers)
-        super().__init__(energies, positions, cleaned_centers)
+class BasisFilteredInterpolation(LinearInterpolation):
+    """Linear interpolation, using responses projected into a given basis."""
+    short_name = 'pca_clean'
+    uses_basis = True
+
+    def __init__(self,
+                 energies: ArrayLike,
+                 positions: ArrayLike,
+                 responses: ArrayLike,
+                 basis: ArrayLike,
+                 **kwargs) -> None:
+        """Initialize the interpolation, cleaning the responses array.
+
+        Args:
+            energy: Energy of the calibration source.
+            positions: Array of calibration points.
+            responses: Array of detector outputs for each calibration point.
+            basis: Set of orthonormal basis vectors. Each vector should have
+                the same shape as the position grid. The array shape is
+                (n_components, n_x, n_y).
+            input_diagnostic: Diagnostic plot of the calibration responses.
+        """
+
+        if np.shape(basis)[1:] != np.shape(positions)[1:]:
+            raise ValueError('Basis must match position size.')
+
+        basis_flat = np.array(basis, dtype=np.float64)\
+            .reshape((np.shape(basis)[0], -1))
+
+        # Check that the basis is orthogonal
+        if not np.allclose(basis_flat @ basis_flat.T,
+                           np.identity(basis_flat.shape[0])):
+            raise ValueError("Basis must have independent, unit components.")
+
+        responses = np.array(responses, dtype=np.float64)
+        responses = np.moveaxis(responses, 0, -2)
+        cleaned_responses = np.transpose(basis) @ np.matmul(basis, responses)
+        cleaned_responses = np.moveaxis(cleaned_responses, -2, 0)
+
+        super().__init__(energies, positions, cleaned_responses, **kwargs)
 
 
 class PCAEnergyInterpolation(Interpolation):
-    def __init__(self, energies, positions, centers, basis):
-        assert centers.shape[-2] == 4
-        assert positions.shape[1:] == centers.shape[:2]
-        assert positions.shape[1] * positions.shape[2] == basis.shape[0]
-        energies = np.ndarray(energies, dtype=np.float64)
-        # TODO, test that grid is rectancular
-        x = positions[0, :, 0].copy()
-        y = positions[1, 0, :].copy()
+    r"""Response function is an energy dependent sum of position functions.
+    
+    $$ \frac{x}{E} = v_0 + \sum_{i = 1}^n v_i E  $$
+    """
+    short_name = 'pca_energy_linear'
+    uses_basis = True
 
-        basis_3d = np.reshape(basis, (len(x), len(y), -1))
+    def __init__(self,
+                 energies: ArrayLike,
+                 positions: ArrayLike,
+                 responses: ArrayLike,
+                 basis: ArrayLike,
+                 **kwargs
+                 ) -> None:
+        """Initialize, determining the energy least squared dependence."""
+        super().__init__(energies, positions, responses, **kwargs)
 
-        self.basis_interp = \
-            RegularGridInterpolator([x, y],
-                                    basis_3d,
-                                    method='linear',
+        if np.shape(basis)[1:] != np.shape(positions)[1:]:
+            raise ValueError('Basis must match position size.')
+
+        self.basis = np.array(basis, dtype=np.float64)
+        basis_flat = self.basis.reshape((self.basis.shape[0], -1))
+
+        # Check that the basis is orthogonal
+        if not np.allclose(basis_flat @ basis_flat.T,
+                           np.identity(basis_flat.shape[0])):
+            raise ValueError("Basis must have independent, unit components.")
+
+        if not np.allclose(self.positions,
+                           np.meshgrid(self.x[:, 0],
+                                       self.y[0, :],
+                                       indexing='ij')):
+            raise ValueError('Calibrations must use an even grid.')
+
+        self.position_interp = \
+            RegularGridInterpolator([self.x[:, 0], self.y[0, :]],
+                                    np.moveaxis(self.basis, 0, -1),
+                                    method='cubic',
                                     bounds_error=False)
 
-        # data_proj = basis.T @ np.reshape(centers, (-1, centers.shape[0]))
-        flat_centers = np.reshape(pca.flip(centers),
-                                  (-1, *centers.shape[-2:]))
+        n_pos = self.positions.shape[1]*self.positions.shape[2]
+        n_comp = self.basis.shape[0]
+        n_det = self.responses.shape[-1]
+        n_e = len(self.energies)
 
-        data_proj = np.apply_along_axis(lambda v: np.dot(v, basis),
-                                        0,
-                                        flat_centers)
+       # Project the response provided into the basis provided
+        response_flipped = pca.flip_response(self.responses)
+        projected = np.matmul(
+            self.basis.reshape((n_comp, n_pos)),
+            np.moveaxis(response_flipped, 0, -2).reshape(n_pos, -1)
+            ).reshape(n_comp*n_e, n_det)
 
-        del flat_centers
-        terms = basis_3d.shape[-1]
-
-        A = np.vstack([self.calc_e_lin(energies),
-                       np.ones(len(energies))]).T
-        y = np.empty(data_proj.shape)
-
-        self.v1 = np.zeros((terms, 4))
-        self.v2 = np.zeros((terms, 4))
-        for tube in range(4):
-            for i in range(terms):
-                y[i, tube, :] = self.calc_y_lin(data_proj[i, tube, :],
-                                                energies)
-                self.v2[i, tube], self.v1[i, tube] = \
-                    np.linalg.lstsq(A, y[i, tube, :], rcond=None)[0]
-
-        super().__init__(energies, positions, centers)
-
-    def values(self, energy, x, y):
-        shape_out = (*np.shape(energy), 4)
-        energy = np.ravel(energy)
-        x = np.ravel(x)
-        y = np.ravel(y)
-        e_var = self.calc_e_lin(energy)
-
-        points = len(x)
-        result = np.empty((points, 4))
-
-        max_step = 500_000
-        for i_l in range(0, points, max_step):
-            i_r = min(points, i_l+max_step)
-            # if i_l > 0:
-            #     print(f'Running points {i_l} to {i_r}')
-            term_weights = (
-                np.multiply.outer(self.v1,
-                                  energy[i_l:i_r])
-                + np.multiply.outer(self.v2,
-                                    energy[i_l:i_r] * e_var[i_l:i_r])
+        self.weights = np.empty((2, n_comp, n_det), dtype=np.float64)
+        for det_i in range(n_det):
+            # Use linear least squares to find the energy dependence.
+            projected = np.matmul(
+                    self.basis.reshape((n_comp, n_pos)),
+                    response_flipped[:, :, :, det_i].reshape(-1, n_pos).T
                 )
+            for comp_j in range(n_comp):
+                energy_matrix = np.vstack((np.ones_like(self.energies),
+                               self.energies)).T
+                self.weights[:, comp_j, det_i] = \
+                    np.linalg.lstsq(energy_matrix,
+                                    projected[comp_j] / self.energies,
+                                    rcond=None)[0]
 
-            pos_interp_term = np.empty((*self.v1.shape, i_r-i_l))
-            for tube in range(4):
-                flip_y, flip_x = pca.flip_tube[tube]
-                pos_interp_term[:, tube, :] = \
-                    self.basis_interp(((-1. if flip_x else 1.)*x[i_l:i_r],
-                                      (-1. if flip_y else 1.)*y[i_l:i_r])).T
-            result[i_l:i_r] = np.sum(pos_interp_term * term_weights, axis=0).T
-        return result.reshape(shape_out)
+    @override
+    def values(self, energy, x, y):
+        shape = np.shape(energy)
+        assert (np.shape(x) == shape) and (np.shape(y) == shape)
 
-    def calc_y_lin(self, y, energies):
-        return y/energies
+        energy = np.array(energy, dtype=np.float64)
+        x = np.array(x, dtype=np.float64)
+        y = np.array(y, dtype=np.float64)
 
-    def calc_e_lin(self, energies):
-        return energies
+        basis = np.array(
+            self.position_interp(
+                np.moveaxis(pca.flip_position([x, y]), 0, -1)),
+            dtype=np.float64
+        )
 
+        predicted_response = np.empty((*shape, 4), dtype=np.float64)
 
-class PCADepthInterpolation(PCAEnergyInterpolation):
-    def __init__(self, energies, positions, centers,
-                 basis, mu_interpolator=None):
-        if mu_interpolator is None:
-            # Default to NaI
-            NA_I_DENSITY = 3.67  # g/cm^3
+        for i in range(4):
+            projected_response = np.array(
+                np.outer(energy, self.weights[0, :, i])\
+                + np.outer(energy**2, self.weights[1, :, i]),
+                dtype=np.float64
+            ).reshape((*shape, basis.shape[-1]))
 
-            e_mu = np.logspace(0, 2.9, 512)
-            val_mu = xraydb.material_mu('NaI', 1e3*e_mu, NA_I_DENSITY, 'total')
-            mu_interpolator = make_interp_spline(e_mu, val_mu, k=1)
+            predicted_response[..., i] = \
+                np.vecdot(basis[..., i, :],
+                          projected_response,
+                          axis=-1) # type: ignore
 
-        self.mu = mu_interpolator
-
-        super().__init__(energies, positions, centers, basis)
-
-    def calc_e_lin(self, energies):
-        # depth in mm: (10 mm/cm) / (mu in /cm)
-        return 10. / self.mu(energies)
+        return predicted_response
 
 
-# TODO, move short name into class
-methods = {'cubic': CubicInterpolation,
-           'pca_clean': PCACleanedInterpolation,
-           'pca_energy_linear': PCAEnergyInterpolation,
-           'pca_depth_linear': PCADepthInterpolation}
-
-uses_basis = {'cubic': False,
-              'pca_clean': True,
-              'pca_energy_linear': True,
-              'pca_depth_linear': True}
+methods = {x.short_name: x for x in
+           [LinearInterpolation,
+            BasisFilteredInterpolation,
+            PCAEnergyInterpolation]}

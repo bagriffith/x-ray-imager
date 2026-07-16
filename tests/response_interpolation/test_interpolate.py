@@ -23,7 +23,8 @@ from unittest import mock
 import pytest
 import numpy as np
 from x_ray_imager_bagriff.response_interpolation import (
-    plot, CubicInterpolation, Interpolation
+    plot, Interpolation,
+    LinearInterpolation, PCAEnergyInterpolation
 )
 
 # Tests will need to check internal functions
@@ -41,35 +42,41 @@ class MockDiagnostic(plot.GenericResponseDiagnostic):
 
 
 @pytest.fixture(name="interpolation_data")
-def interpolation_data():
+def minimal_data():
     """Provides dummy data for Interpolation tests."""
-    init_energies = np.array([10., 20.])
-    init_positions = np.array([[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]])
-    init_responses = np.zeros((2, 2, 2, 4))
-
-    energy = 10.0
-    positions_for_validate = np.array([
-        [[0.1, 1.1],
-         [2.1, 3.1]],
-        [[4.1, 5.1],
-         [6.1, 7.1]]
-    ]) # shape (2, 2, 2)
-
-    responses_for_validate = np.array([
-        [[10., 10., 10., 10.], [11., 11., 11., 11.]],
-        [[12., 12., 12., 12.], [13., 13., 13., 13.]]]
-    ) # shape (2, 2, 4) - validate expects (n_x, n_y, n_detectors)
-
-    interp_responses = np.array([
-        [[10.5, 10.0, 10.5, 10.0], # for (0,0)
-         [11.5, 11.0, 11.5, 11.0]], # for (0,1)
-        [[12.5, 12.0, 12.5, 12.0], # for (1,0)
-         [13.5, 13.0, 13.5, 13.0]]] # for (1,1)
+    init_energies = np.array([10.])
+    init_positions = np.arange(8).reshape(2, 2, 2)
+    init_responses = np.array([[
+        [[10.0, 10.0, 10.0, 10.0], # for (0,0,0)
+         [11.0, 11.0, 11.0, 11.0]], # for (0,0,1)
+        [[12.0, 12.0, 12.0, 12.0], # for (0,1,0)
+         [13.0, 13.0, 13.0, 13.0]]]] # for (0,1,1)
     )
-    return (init_energies, init_positions, init_responses, energy,
-            positions_for_validate, responses_for_validate,
-            interp_responses)
 
+    interp_responses = np.array([[
+        [[10.5, 10.0, 10.5, 10.0], # for (0,0,0)
+         [11.5, 11.0, 11.5, 11.0]], # for (0,0,1)
+        [[12.5, 12.0, 12.5, 12.0], # for (0,1,0)
+         [13.5, 13.0, 13.5, 13.0]]]] # for (0,1,1)
+    )
+    return (init_energies, init_positions, init_responses, interp_responses)
+
+
+@pytest.fixture
+def realistic_data():
+    energy = np.linspace(50, 500, 19)
+    x = np.linspace(-70, 70, 29)
+    y = np.linspace(-70, 70, 29)
+    e_mesh, x_mesh, y_mesh = np.meshgrid(energy, x, y, indexing='ij')
+    response = np.repeat(
+        np.expand_dims((e_mesh / 25) * ((x_mesh + 100) + 2*(y_mesh + 100)), 3),
+        4, axis=3)
+    
+    sampled_energy = energy[::2]
+    sampled_position = np.array(np.meshgrid(x[::2], y[::2], indexing='ij'))
+    sampled_response = response[::2, ::2, ::2, :]
+    return (e_mesh, x_mesh, y_mesh, response,
+            sampled_energy, sampled_position, sampled_response)
 
 def test_interpolation_check_shape():
     """Checks that Interpolation._check_shape() checks arrays correctly."""
@@ -115,23 +122,18 @@ def test_interpolation_check_shape():
 
 def test_interpolation_validate(interpolation_data):
     """Checks that Interpolation.validate() calculates errors correctly."""
-    (init_energies, init_positions, init_responses, energy,
-     positions_for_validate, responses_for_validate,
-     interp_responses) = interpolation_data
+    (init_energies, init_positions,
+     init_responses, interp_responses) = interpolation_data
 
     with mock.patch.object(Interpolation, 'values',
-                          return_value=interp_responses):
+                           return_value=interp_responses):
 
         interpolator = Interpolation(init_energies,
                                      init_positions,
                                      init_responses)
 
         # Call validate
-        max_error, mean_error = interpolator.validate(
-            energy,
-            positions_for_validate,
-            responses_for_validate
-        )
+        max_error, mean_error = interpolator.validate()
 
         assert max_error == pytest.approx(0.5)
         assert mean_error == pytest.approx(0.25)
@@ -143,20 +145,17 @@ def test_interpolation_init():
     positions = np.array([[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]])
     responses = np.zeros((2, 2, 2, 4))
 
-    with (mock.patch.object(Interpolation, '_check_shape') as mock_check_shape,
-          mock.patch.object(Interpolation, 'validate',
-                            return_value=(0., 0.)) as mock_validate):
+    with (mock.patch.object(Interpolation, '_check_shape') as mock_check_shape):
         Interpolation(energies, positions, responses)
         mock_check_shape.assert_called_once_with(energies,
                                                  positions,
                                                  responses)
-        assert mock_validate.call_count == len(energies)
 
 
 def test_interpolation_diagnostics(interpolation_data):
     """Checks that correct values are passed to each diagnostic plot."""
-    (init_energies, init_positions, init_responses,
-     _, _, _, interp_responses) = interpolation_data
+    (init_energies, init_positions,
+     init_responses, interp_responses) = interpolation_data
 
     # Create mock diagnostic objects
     diagnostics = {s: MockDiagnostic() for s in
@@ -181,10 +180,13 @@ def test_interpolation_diagnostics(interpolation_data):
                           'savefig') as error_save
     ):
         # Initialize Interpolation with diagnostics
-        Interpolation(init_energies,
-                      init_positions,
-                      init_responses,
-                      **diagnostics)
+        interp = Interpolation(init_energies,
+                               init_positions,
+                               init_responses,
+                               input_diagnostic=diagnostics['input_diagnostic'])
+
+        interp.validate(output_diagnostic=diagnostics['output_diagnostic'],
+                        error_diagnostic=diagnostics['error_diagnostic'])
 
         # Each diagnostic is called once for each energy in init_energies
         for plot, save in [(input_plot, input_save),
@@ -194,23 +196,32 @@ def test_interpolation_diagnostics(interpolation_data):
             assert save.call_count == len(init_energies)
 
 
-def test_cubic_interpolation():
+def test_linear_interpolation(realistic_data):
     """Tests CubicInterpolation accurately interpolates a linear function."""
-    energy = np.linspace(50, 500, 19)
-    x = np.linspace(-70, 70, 29)
-    y = np.linspace(-70, 70, 29)
-    e_mesh, x_mesh, y_mesh = np.meshgrid(energy, x, y, indexing='ij')
-    response = np.repeat(
-        np.expand_dims((e_mesh / 25) * ((x_mesh + 100) + 2*(y_mesh + 100)), 3),
-        4, axis=3)
+    (e_mesh, x_mesh, y_mesh, response,
+     sampled_energy, sampled_position, sampled_response) = realistic_data
 
-    sampled_energy = energy[::2]
-    sampled_position = np.array(np.meshgrid(x[::2], y[::2],
-                                indexing='ij'))
-    sampled_response = response[::2, ::2, ::2, :]
-    interpolator = CubicInterpolation(sampled_energy,
-                                      sampled_position,
-                                      sampled_response)
+    interpolator = LinearInterpolation(sampled_energy,
+                                       sampled_position,
+                                       sampled_response)
+
+    interpolated = interpolator.values(e_mesh, x_mesh, y_mesh)
+    assert pytest.approx(response, 1e-3) == interpolated
+
+
+def test_pca_interpolation(realistic_data):
+    (e_mesh, x_mesh, y_mesh, response,
+     sampled_energy, sampled_position, sampled_response) = realistic_data
+
+    basis = [np.ones_like(x_mesh[0, ::2, ::2]),
+             x_mesh[0, ::2, ::2],
+             y_mesh[0, ::2, ::2]]
+    basis = [x / np.linalg.norm(x) for x in basis]
+
+    interpolator = PCAEnergyInterpolation(sampled_energy,
+                                          sampled_position,
+                                          sampled_response,
+                                          basis)
 
     interpolated = interpolator.values(e_mesh, x_mesh, y_mesh)
     assert pytest.approx(response, 1e-3) == interpolated

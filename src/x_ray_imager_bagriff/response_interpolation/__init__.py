@@ -20,14 +20,12 @@
 
 from ._interpolate import (
     Interpolation,
-    CubicInterpolation,
-    PCACleanedInterpolation,
-    PCAEnergyInterpolation,
-    PCADepthInterpolation
+    LinearInterpolation,
+    BasisFilteredInterpolation,
+    PCAEnergyInterpolation
 )
 
 __all__ = ['Interpolation',
-           'CubicInterpolation',
-           'PCACleanedInterpolation',
-           'PCAEnergyInterpolation',
-           'PCADepthInterpolation']
+           'LinearInterpolation',
+           'BasisFilteredInterpolation',
+           'PCAEnergyInterpolation']

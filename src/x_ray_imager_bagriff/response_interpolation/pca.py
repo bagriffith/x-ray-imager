@@ -20,56 +20,85 @@
 
 import logging
 import numpy as np
+from numpy.typing import ArrayLike, NDArray
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_COMPS = 5
 
-flip_tube = {0: (False, True),
-             1: (True, True),
-             2: (True, False),
-             3: (False, False)}
+DIRECTION = [[-1, -1, 1, 1],
+             [1, -1, -1, 1]]
 
 
-def flip(a):
-    b = np.zeros_like(a)
-    for tube_n in range(4):
-        flip_y, flip_x = flip_tube[tube_n]
-        b[:, :, tube_n] = a[::-1 if flip_x else 1,
-                            ::-1 if flip_y else 1,
-                            tube_n]
-    return b
+def flip_response(response: ArrayLike) -> NDArray[np.float64]:
+    """Mirror the four detector responses to have the same orientation.
+    
+    ``flip_response`` changes to matrix so all detectors use the same
+    positions. ``flip_position`` flips the values in that position array.
+
+    Args:
+        response: Detector response function on a symmetrical grid,
+            n_pt across on each axis. Shape should be
+            (*any_shape, n_pt, n_pt, n_det=4)
+    """
+    response = np.float64(response)
+    assert response.shape[-1] == 4
+
+    for i in range(4):
+        response[..., i] = response[...,
+                                    ::DIRECTION[0][i],
+                                    ::DIRECTION[1][i],
+                                    i]
+
+    return response
 
 
-def form_basis(centers, terms=8):
+def flip_position(positions):
+    """Mirror the x/y values so all detectors have the same orientation.
+
+    ``flip_response`` changes to matrix so all detectors use the same
+    positions. ``flip_position`` flips the values in that position array.
+    """
+    return np.moveaxis(
+        np.array([[det_sign * comp for det_sign in signs]
+                   for comp, signs in zip(positions, DIRECTION)]),
+                   1, -1)
+
+
+def form_basis(response: ArrayLike
+               ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
     """Use PCA to create a basis based variation of tube response shape
 
     Args:
-        centers: shape (nx, ny, 4, )
+        response: Collection of responses used to determine the new basis.
+        It should be a list of response grids. The shape should be
+        (n_sets, nx, ny, 4). The grid should be square (n_x == n_y).
+
+    Returns:
+        Tuple of two arrays. The first is the set of PCA basis functions in
+        order of singular value magnitude. The shape is is (n_sets, nx, ny).
+        The second is an array of those singular values
+
+        Not all of these components are useful. Truncate it to k components
+        using ``basis[:k, :, :]``.
     """
-    # TODO mirror tube
-    logging.debug('%s components', terms)
-    logging.debug('for_basis centers shape %s', centers.shape)
-    assert (len(centers.shape) == 4) and centers.shape[2] == 4
-    data = flip(centers)
+    # Verify correct shape
+    response_shape = np.shape(response)
+    logger.debug('for_basis centers shape %s', response_shape)
 
-    # for i in range(data.shape[3]):
-    #     X, Y = np.meshgrid(np.arange(data.shape[0]),
-    #                                  np.arange(data.shape[1]))
-    #     nn_calibration.plot.grid(X, Y, data[:,:,:,i], label=f'pt{i}_pca')
+    if (len(response_shape) != 4
+        or response_shape[-1] != 4
+        or response_shape[1] != response_shape[2]):
+        raise ValueError(f'Incorrect shape for response, {response_shape}.')
 
-    logging.debug('for_basis data shape %s', data.shape)
+    n_pts = response_shape[1]  # Number of x or y samples
 
-    data_flat = np.reshape(data, (data.shape[0]*data.shape[1],
-                                  data.shape[2]*data.shape[3])).T
+    response = flip_response(response)
+    data = np.moveaxis(response, -1, 1).reshape((-1, n_pts*n_pts))
+    data /= np.max(data, axis=1)[:, np.newaxis]  # Normalize the responses
+    logger.debug('Shape of data for SVD: %s', data.shape)
 
-    # X, Y = np.meshgrid(np.arange(data.shape[0]), np.arange(data.shape[1]))
-    # q = np.empty((data.shape[0], data.shape[1], 4))
-    # for i in range(4):
-    #     q[:, :, i] = np.reshape(data_flat[i, :],
-    #                             (data.shape[0], data.shape[1]))
-    # nn_calibration.plot.grid(X, Y, q, label=f'ptflat_pca')
-
-    logging.debug('for_basis data_flat shape %s', data_flat.shape)
-
-    _, s, vh = np.linalg.svd(data_flat, full_matrices=False)
-    logging.info(s[:terms])
-    return vh[:terms].T
+    _, s, vh = np.linalg.svd(data, full_matrices=False)
+    logger.info('Top singular values: %s', s[:10])
+    logger.debug('Other singular values: %s', s[10:])
+    return vh.reshape((-1, n_pts, n_pts)), s

@@ -86,7 +86,7 @@ class GenericResponseDiagnostic(Figure):
                              '(2, n_x_points, n_y_points)')
 
         if position.shape[1:] != X.shape[:-1]:
-            raise ValueError('Mismatch between'
+            raise ValueError('Mismatch between '
                              f'position shape {position.shape} and '
                              f'response shape {X.shape}.')
 

@@ -25,7 +25,7 @@ import click
 import numpy as np
 import pandas as pd
 from x_ray_imager_bagriff.response_interpolation import (
-    CubicInterpolation,
+    LinearInterpolation,
     plot
 )
 from x_ray_imager_bagriff.cli import log_level_options
@@ -138,10 +138,13 @@ def cli(files, lines, output, plot_diagnostics):
              'output_diagnostic': plot.ColorMeshDiagnostic(),
              'error_diagnostic': plot.ColorMeshDiagnostic()}
 
-    interpolator = CubicInterpolation(sampled_energy,
-                                      sampled_position,
-                                      sampled_response,
-                                      **diagnostic_kwargs)
+    interpolator = LinearInterpolation(
+        sampled_energy,
+        sampled_position,
+        sampled_response,
+        input_diagnostic=diagnostic_kwargs.pop('input_diagnostic', None))
+
+    interpolator.validate(**diagnostic_kwargs)
 
     # Interpolate
     response_mesh = interpolator.values(energy_mesh,
