@@ -20,7 +20,8 @@
 
 """Plot observations from an x-ray imager."""
 from importlib import resources
-from typing import Optional
+import logging
+from typing import Optional, override
 from matplotlib import rc_params_from_file
 from matplotlib.animation import TimedAnimation
 from matplotlib.axes import Axes
@@ -34,10 +35,13 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 import pandas as pd
 from pandas import DataFrame
+from scipy.stats import truncnorm
 import x_ray_imager_bagriff
 
 STYLE_FILE = str(resources.files(x_ray_imager_bagriff)
                  .joinpath('plot_style.mplstyle'))
+
+logger = logging.getLogger(__name__)
 
 
 class ImagerAxes(Axes):
@@ -79,7 +83,10 @@ class ImagerAxes(Axes):
     def image_hist(self,
                    x: ArrayLike, y: ArrayLike,
                    bins: Optional[ArrayLike] = None,
-                   image_max: Optional[float] = None
+                   image_max: Optional[float] = None,
+                   dx: Optional[ArrayLike] = None,
+                   dy: Optional[ArrayLike] = None,
+                   duration: Optional[float] = None
                    ) -> QuadMesh:
         """Create a 2D histogram of observed x-ray positions.
         
@@ -90,6 +97,8 @@ class ImagerAxes(Axes):
                 Also sets the axis limits. If not provided, defaults to
                 -70 mm to +70 mm in 2.5 mm bins.
         """
+        _ = duration  # Not used
+
         if bins is None:
             # Default value
             bins = np.linspace(-70, 70, 57)  # mm
@@ -100,7 +109,37 @@ class ImagerAxes(Axes):
         self.set_ylim(bins[0], bins[-1])
         self.set_aspect('equal')
 
-        return self.hist2d(x, y, bins, vmin=0, vmax=image_max)[-1]
+        if dx is None and dy is None:
+            return self.hist2d(x, y, bins, vmin=0, vmax=image_max)[-1]
+
+        if dx is None or dy is None:
+            raise ValueError('Must provide both dx and dy.')
+
+        x = np.array(x)
+        y = np.array(y)
+        dx = np.array(dx)
+        dy = np.array(dy)
+
+        if np.any(dx < bins[1] - bins[0]) or np.any(dx < bins[1] - bins[0]):
+            logger.warning('Image pixels are larger than position errors.')
+
+        image = np.zeros([len(bins)-1]*2)
+
+        for pos, err in zip(zip(x, y), zip(dx, dy)):
+            p = [(truncnorm.cdf(bins[1:], bins[0], bins[-1], pos_j, err_j)
+                  - truncnorm.cdf(bins[:-1], bins[0], bins[-1], pos_j, err_j))
+                 for pos_j, err_j in zip(pos, err)]
+
+            single_image = np.outer(*p)
+            image_total = np.sum(single_image)
+
+            if np.abs(image_total - 1) > 0.01:
+                logger.warning("Total error should be one, but is instead %s.",
+                               image_total)
+
+            image += single_image / image_total
+
+        return self.pcolormesh(bins, bins, image, vmin=0, vmax=image_max)
 
 
 class ImagerFigure(Figure):
@@ -216,6 +255,8 @@ class ImageHistFigure(ImagerFigure):
             y: Observation array y-coordinate.
             energy_range: Tuple with the lower and upper limit to be used for
                 the position histogram. Others are ignored.
+            dx:
+            dy: 
         """
         with plt.rc_context(self.rc_params):
             if energy_range is not None:
@@ -224,12 +265,14 @@ class ImageHistFigure(ImagerFigure):
             self.ax_image.clear()
             self.ax_colorbar.clear()
             assert isinstance(self.ax_image, ImagerAxes)
-            col = self.ax_image.image_hist(x, y, image_max=self.image_max)
+            col = self.ax_image.image_hist(x, y,
+                                           image_max=self.image_max,
+                                           **kwargs)
             self.colorbar(col, cax=self.ax_colorbar)
             self.ax_colorbar.set_ylabel('x-rays / bin')
 
 
-class ImageSpectrumFigure(ImagerFigure):
+class ImageSpectrumFigure(SpectrumFigure, ImageHistFigure):
     """Figure with an energy spectrum on top of a position historgram.
     
     Attributes:
@@ -244,7 +287,7 @@ class ImageSpectrumFigure(ImagerFigure):
                  spectrum_max: Optional[float] = None,
                  image_max: Optional[float] = None,
                  **kwargs):
-        super().__init__(*args, **kwargs)
+        ImagerFigure.__init__(self, *args, **kwargs)
         gs = GridSpec(8, 8, figure=self,
                       hspace=1.0, wspace=1.0)
         self.ax_spectrum = self.add_subplot(gs[:2, :], axes_class=ImagerAxes)
@@ -253,40 +296,11 @@ class ImageSpectrumFigure(ImagerFigure):
         self.image_max = image_max
         self.ax_colorbar = self.add_subplot(gs[2:, -1], axes_class=ImagerAxes)
 
-    def plot_observations(self,
-                          energy: ArrayLike,
-                          x: ArrayLike,
-                          y: ArrayLike,
-                          duration: Optional[float] = None,
-                          energy_range: Optional[tuple[float, float]] = None,
-                          **kwargs):
-        """Plot both energy spectrum and position histogram.
-        
-        Args:
-            energy: Observation array energies. Shape matches x and y
-            x: Observation array x-coordinate.
-            y: Observation array y-coordinate.
-            duration: Total time for collecting these measurements. See
-                ``ImagerAxes.energy_spectrum()`` for usage.
-            energy_range: Tuple with the lower and upper limit to be used for
-                the position histogram. Others are ignored.
-        """
-        with plt.rc_context(self.rc_params):
-            self.ax_spectrum.clear()
-            assert isinstance(self.ax_spectrum, ImagerAxes)
-            self.ax_spectrum.energy_spectrum(energy, duration=duration)
-            self.ax_spectrum.set_ylim(0, self.spectrum_max)
-
-            if energy_range is not None:
-                x, y = self._filter_by_energy(energy, x, y, energy_range)
-                self.ax_spectrum.axvspan(*energy_range, alpha=0.2, color='C1')
-
-            self.ax_image.clear()
-            self.ax_colorbar.clear()
-            assert isinstance(self.ax_image, ImagerAxes)
-            col = self.ax_image.image_hist(x, y, image_max=self.image_max)
-            self.colorbar(col, cax=self.ax_colorbar)
-            self.ax_colorbar.set_ylabel('x-rays / bin')
+    @override
+    def plot_observations(self, *args, **kwargs):
+        """Plot both energy spectrum and position histogram."""
+        SpectrumFigure.plot_observations(self, *args, **kwargs)
+        ImageHistFigure.plot_observations(self, *args, **kwargs)
 
 
 class ImagerAnimation(TimedAnimation):

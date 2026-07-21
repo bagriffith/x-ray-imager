@@ -86,6 +86,26 @@ def test_image_hist(tmp_path, example_imager_data):
     plt.close(fig)
 
 
+def test_image_hist_error(tmp_path, example_imager_data):
+    """Test ``ImagerAxes.image_hist()``."""
+    _, x, y = example_imager_data
+    dx = np.full_like(x, 20.0)
+    dy = np.full_like(x, 20.0)
+
+    fig = plt.figure()
+    ax = fig.add_subplot(axes_class=ImagerAxes)
+    result = ax.image_hist(x, y, dx=dx, dy=dy,  # type: ignore
+                           bins=np.linspace(-70, 70, 281))
+
+    assert isinstance(result, QuadMesh)
+
+    save_path = tmp_path / 'image_hist.png'
+    fig.savefig(save_path)
+    assert save_path.exists()
+
+    plt.close(fig)
+
+
 def test_filter_by_energy(example_imager_data):
     """Test ``ImagerFigure._filter_by_energy()``."""
     energy, x, y = example_imager_data
