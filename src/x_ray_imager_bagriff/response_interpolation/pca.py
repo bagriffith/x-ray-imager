@@ -95,7 +95,7 @@ def form_basis(response: ArrayLike
 
     response = flip_response(response)
     data = np.moveaxis(response, -1, 1).reshape((-1, n_pts*n_pts))
-    data /= np.max(data, axis=1)[:, np.newaxis]  # Normalize the responses
+    # data /= np.max(data, axis=1)[:, np.newaxis]  # Normalize the responses
     logger.debug('Shape of data for SVD: %s', data.shape)
 
     _, s, vh = np.linalg.svd(data, full_matrices=False)
