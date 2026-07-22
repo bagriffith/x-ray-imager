@@ -35,6 +35,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 import pandas as pd
 from pandas import DataFrame
+from scipy.special import ndtr
 from scipy.stats import truncnorm
 import x_ray_imager_bagriff
 
@@ -50,6 +51,7 @@ class ImagerAxes(Axes):
             self,
             energy: ArrayLike,
             bins: Optional[ArrayLike] = None,
+            d_energy: Optional[ArrayLike] = None,
             duration: Optional[float] = None
             ) -> BarContainer | Polygon | list[BarContainer | Polygon]:
         """Plot an energy spectrum histogram.
@@ -76,16 +78,19 @@ class ImagerAxes(Axes):
         duration_weight = np.full_like(energy,
                                        1.0 if duration is None else 1/duration)
 
-        return self.hist(energy, bins,
-                         density=True,
-                         weights=duration_weight)[-1]
+        if d_energy is None:
+            return self.hist(energy, bins,
+                             density=True,
+                             weights=duration_weight)[-1]
+
+        return self.step()
 
     def image_hist(self,
                    x: ArrayLike, y: ArrayLike,
                    bins: Optional[ArrayLike] = None,
                    image_max: Optional[float] = None,
-                   dx: Optional[ArrayLike] = None,
-                   dy: Optional[ArrayLike] = None,
+                   d_x: Optional[ArrayLike] = None,
+                   d_y: Optional[ArrayLike] = None,
                    duration: Optional[float] = None
                    ) -> QuadMesh:
         """Create a 2D histogram of observed x-ray positions.
@@ -109,25 +114,29 @@ class ImagerAxes(Axes):
         self.set_ylim(bins[0], bins[-1])
         self.set_aspect('equal')
 
-        if dx is None and dy is None:
+        if d_x is None and d_y is None:
             return self.hist2d(x, y, bins, vmin=0, vmax=image_max)[-1]
 
-        if dx is None or dy is None:
+        if d_x is None or d_y is None:
             raise ValueError('Must provide both dx and dy.')
 
         x = np.array(x)
         y = np.array(y)
-        dx = np.array(dx)
-        dy = np.array(dy)
+        d_x = np.array(d_x)
+        d_y = np.array(d_y)
 
-        if np.any(dx < bins[1] - bins[0]) or np.any(dx < bins[1] - bins[0]):
+        if np.any(d_x < bins[1] - bins[0]) or np.any(d_x < bins[1] - bins[0]):
             logger.warning('Image pixels are larger than position errors.')
 
         image = np.zeros([len(bins)-1]*2)
 
-        for pos, err in zip(zip(x, y), zip(dx, dy)):
-            p = [(truncnorm.cdf(bins[1:], bins[0], bins[-1], pos_j, err_j)
-                  - truncnorm.cdf(bins[:-1], bins[0], bins[-1], pos_j, err_j))
+        for pos, err in zip(zip(x, y), zip(d_x, d_y)):
+            p = [(self.trunc_norm_cdf(bins[1:],
+                                      bins[0], bins[-1],
+                                      pos_j, err_j)
+                  - self.trunc_norm_cdf(bins[:-1],
+                                        bins[0], bins[-1],
+                                        pos_j, err_j))
                  for pos_j, err_j in zip(pos, err)]
 
             single_image = np.outer(*p)
@@ -140,6 +149,28 @@ class ImagerAxes(Axes):
             image += single_image / image_total
 
         return self.pcolormesh(bins, bins, image, vmin=0, vmax=image_max)
+
+    @staticmethod
+    def trunc_norm_cdf(x, a, b, mean, std):
+        mu = mean
+        sigma = std
+        for _ in range(10):
+            alpha = (a - mu) / sigma
+            beta = (b - mu) / sigma
+            z_w_pi = np.sqrt(2*np.pi) * (ndtr(beta) - ndtr(alpha))
+
+            k = ((np.exp(-0.5*alpha**2)) - np.exp(-0.5*beta**2)) / z_w_pi
+
+            sigma = std / np.sqrt(
+                1 
+                - (beta * np.exp(-0.5*beta**2)
+                - alpha * np.exp(-0.5*alpha**2)) / z_w_pi
+                - k**2
+            )
+
+            mu = mean - k * sigma
+
+        return truncnorm.cdf(x, a, b, mu, sigma)
 
 
 class ImagerFigure(Figure):

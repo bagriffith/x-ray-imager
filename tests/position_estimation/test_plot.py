@@ -26,6 +26,7 @@ from matplotlib.collections import QuadMesh
 from matplotlib.container import BarContainer
 from matplotlib.patches import Polygon
 import pandas as pd
+from scipy.stats import truncnorm
 from x_ray_imager_bagriff.position_estimation.plot import (
     ImagerAxes,
     ImagerFigure, SpectrumFigure, ImageHistFigure, ImageSpectrumFigure,
@@ -45,6 +46,23 @@ def example_imager_data():
     y = np.random.normal(-10.0, 20.0, n_points)
     energy = 600 * np.random.beta(2, 5, n_points)
     return energy, x, y
+
+
+def test_trunc_norm_cdf():
+    a = -1
+    b = 1
+    mu_param = -0.6
+    sigma_param = 0.4
+    k = 0.242 / 0.841  # normal_pdf(-1) / (1 - normal_cdf(-1))
+    mu_real = mu_param + sigma_param * k
+    sigma_real = sigma_param * np.sqrt(1 - k - k**2 )
+
+    x = np.linspace(-1, 1, 10)
+    expected = truncnorm.cdf(x, a, b, mu_param, sigma_param)
+
+    calculated = ImagerAxes.trunc_norm_cdf(x, a, b, mu_real, sigma_real)
+
+    assert calculated == pytest.approx(expected, abs=0.01)
 
 
 def test_energy_spectrum(tmp_path, example_imager_data):
@@ -94,7 +112,7 @@ def test_image_hist_error(tmp_path, example_imager_data):
 
     fig = plt.figure()
     ax = fig.add_subplot(axes_class=ImagerAxes)
-    result = ax.image_hist(x, y, dx=dx, dy=dy,  # type: ignore
+    result = ax.image_hist(x, y, d_x=dx, d_y=dy,  # type: ignore
                            bins=np.linspace(-70, 70, 281))
 
     assert isinstance(result, QuadMesh)

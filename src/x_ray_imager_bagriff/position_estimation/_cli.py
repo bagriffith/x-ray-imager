@@ -112,8 +112,10 @@ def series(calibration, observations, output, threshold):
 @click.option('--energy', '-e', 'energy_range', nargs=2,
               type=click.FloatRange(min=0),
               help="Only use x-rays in this energy band for position plots.")
+@click.option('--error', 'use_error', is_flag=True,
+              help="Use uncertainties to construct plots.")
 @log_level_options(logger)
-def plot_fig(observations, figure, output, energy_range):
+def plot_fig(observations, figure, output, energy_range, use_error):
     """Plot a set of x-ray positions and/or energies.
 
     OBSERVATIONS is a CSV with each row being a single observed x-ray.
@@ -122,10 +124,20 @@ def plot_fig(observations, figure, output, energy_range):
     """
     df = pd.read_csv(observations)
 
+    error_dict = dict()
+
+    if use_error:
+        for col in ['d_energy', 'd_x', 'd_y']:
+            if col not in df:
+                raise RuntimeError("OBSERVATIONS is missing error column.")
+
+            error_dict[col] = df[col]
+
     figsize = (6.5, {'spectrum': 4.0, 'image': 5.0, 'both': 8}[figure])
     fig = plot.figure_names[figure](figsize=figsize, image_max=400)
     fig.plot_observations(df['energy'], df['x'], df['y'],
-                          energy_range=energy_range)
+                          energy_range=energy_range,
+                          **error_dict)
     fig.savefig(output)
 
 
