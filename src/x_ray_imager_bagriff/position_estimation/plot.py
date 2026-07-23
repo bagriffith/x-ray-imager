@@ -21,7 +21,7 @@
 """Plot observations from an x-ray imager."""
 from importlib import resources
 import logging
-from typing import Optional, override
+from typing import Any, Optional, override
 from matplotlib import rc_params_from_file
 from matplotlib.animation import TimedAnimation
 from matplotlib.axes import Axes
@@ -29,13 +29,14 @@ from matplotlib.container import BarContainer
 from matplotlib.collections import QuadMesh
 from matplotlib.figure import Figure
 from matplotlib.gridspec import GridSpec
+from matplotlib.lines import Line2D
 from matplotlib.patches import Polygon
 import matplotlib.pyplot as plt
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 import pandas as pd
 from pandas import DataFrame
-from scipy.special import ndtr
+from scipy.special import ndtr  # pylint: disable=no-name-in-module
 from scipy.stats import truncnorm
 import x_ray_imager_bagriff
 
@@ -53,7 +54,8 @@ class ImagerAxes(Axes):
             bins: Optional[ArrayLike] = None,
             d_energy: Optional[ArrayLike] = None,
             duration: Optional[float] = None
-            ) -> BarContainer | Polygon | list[BarContainer | Polygon]:
+            ) -> BarContainer | Polygon \
+                | list[BarContainer | Polygon] | list[Line2D]:
         """Plot an energy spectrum histogram.
         
         Args:
@@ -61,6 +63,7 @@ class ImagerAxes(Axes):
                 Expected to be in keV.
             bins: Energy edges for histogram bins Default if not provided
                 spans from 10 keV to 600 keV.
+            d_energy: Uncertainty for energy. Must have the same shape.
             duration: Total time for collecting these measurements. If
                 provided the y-axis will be time normalized.
         """
@@ -68,22 +71,45 @@ class ImagerAxes(Axes):
             # Default value
             bins = np.linspace(10, 600, 296)  # keV
 
-        bins = list(np.array(bins, dtype=np.float64))
+        bins = np.array(bins, dtype=np.float64)
 
         self.set_xlim(bins[0], bins[-1])
         self.set_xlabel(r'$\textrm{keV}$')
         self.set_ylabel(r'$\textrm{x-rays} / \textrm{keV}$' if duration is None
                         else r'$/\textrm{s}\,\textrm{keV}$')
-        # 1/t weight puts the plot in units of /s.
-        duration_weight = np.full_like(energy,
-                                       1.0 if duration is None else 1/duration)
+    
+        duration_weight = np.full_like(energy, 1.0, dtype=np.float64)
+    
+        if duration is not None:
+            # 1/t weight puts the plot in units of /s.
+            duration_weight /= duration
 
         if d_energy is None:
-            return self.hist(energy, bins,
+            return self.hist(energy, list(bins),
                              density=True,
                              weights=duration_weight)[-1]
 
-        return self.step()
+        if np.shape(energy) != np.shape(d_energy):
+            raise ValueError("Energy points and error shape mismatch.")
+
+        energy = np.array(energy)
+        d_energy = np.array(d_energy)
+
+        spectrum = np.zeros(len(bins)-1)
+
+        for energy_pt, error_pt in zip(energy, d_energy):
+            spectrum_pt = (truncnorm.cdf(bins[1:],
+                                         0, np.inf,
+                                         energy_pt, error_pt)
+                           - truncnorm.cdf(bins[:-1],
+                                           0, np.inf,
+                                           energy_pt, error_pt))
+            spectrum += spectrum_pt
+
+        if np.any(d_energy < bins[1] - bins[0]):
+            logger.warning('Spectrum steps larger than energy errors.')
+
+        return self.plot((bins[:-1] + bins[1:])/2, spectrum)
 
     def image_hist(self,
                    x: ArrayLike, y: ArrayLike,
@@ -95,18 +121,27 @@ class ImagerAxes(Axes):
                    ) -> QuadMesh:
         """Create a 2D histogram of observed x-ray positions.
         
+        The shapes of x and y should match. If provided, d_x and d_y should
+        also have that shape.
+
         Args:
-            x: Observation array x-coordinate. Shape matches y.
+            x: Observation array x-coordinate.
             y: Observation array y-coordinate.
+            image_max: Maximum value for image colormap.
             bins: Position bin edges used for both x and y coordinates.
                 Also sets the axis limits. If not provided, defaults to
-                -70 mm to +70 mm in 2.5 mm bins.
+                -70 mm to +70 mm in 2.5 mm bins. If d_x and d_y are provided,
+                use a higher resolution.
+            d_x: Uncertainty in the x-coordinate.
+            d_y: Uncertainty in the y-coordinate.
+            duration: Duration of the measurement. It is not used because
+                intensity is given as in x-rays/bin. Would be needed if flux
         """
         _ = duration  # Not used
 
         if bins is None:
             # Default value
-            bins = np.linspace(-70, 70, 57)  # mm
+            bins = np.linspace(-70, 70, 57 if d_x is None else 141)  # mm
 
         bins = list(np.array(bins, dtype=np.float64))
 
@@ -131,15 +166,17 @@ class ImagerAxes(Axes):
         image = np.zeros([len(bins)-1]*2)
 
         for pos, err in zip(zip(x, y), zip(d_x, d_y)):
-            p = [(self.trunc_norm_cdf(bins[1:],
-                                      bins[0], bins[-1],
-                                      pos_j, err_j)
-                  - self.trunc_norm_cdf(bins[:-1],
-                                        bins[0], bins[-1],
-                                        pos_j, err_j))
-                 for pos_j, err_j in zip(pos, err)]
+            p = []
+            for pos_comp, err_comp in zip(pos, err):
+                mu, sigma = self.trunc_norm_params(bins[0], bins[-1],
+                                                   pos_comp, err_comp)
 
-            single_image = np.outer(*p)
+                p.append(
+                    truncnorm.cdf(bins[1:], bins[0], bins[-1], mu, sigma)
+                    - truncnorm.cdf(bins[:-1], bins[0], bins[-1], mu, sigma)
+                    )
+
+            single_image = np.outer(p[0], p[1])
             image_total = np.sum(single_image)
 
             if np.abs(image_total - 1) > 0.01:
@@ -148,29 +185,74 @@ class ImagerAxes(Axes):
 
             image += single_image / image_total
 
-        return self.pcolormesh(bins, bins, image, vmin=0, vmax=image_max)
+        return self.pcolormesh(bins, bins, image.T, vmin=0, vmax=image_max)
 
     @staticmethod
-    def trunc_norm_cdf(x, a, b, mean, std):
+    def trunc_norm_params(a: float, b:float,
+                          mean:float, std:float
+                          ) -> tuple[float, float]:
+        r"""Find paramters for truncated normal with given mean/standard dev.
+
+        A normal distribution with PDF $\phi((x-\mu)/\sigma)$ and CDF
+        $\Phi((x-\mu)/\sigma)$) is truncated on $(a, b)$.
+        Let $\alpha = (a - \mu) / \sigma$, $\beta = (b - \mu) / \sigma$,
+        and $Z = \Phi(\beta) - \Phi(\alpha)$
+        
+        The actual mean for the distribution is:
+
+        $$ \mu + \sigma \left( \frac{\phi(\alpha) - \phi(\beta)}{Z} \right) $$
+
+        And the standard deviation is:
+
+        $$ \sigma \left[ 1 - \frac{\beta \phi(\alpha) - \alpha \phi(\beta)}{Z} - \left( \frac{\phi(\alpha) - \phi(\beta)}{Z} \right)^2 \right]^{1/2} $$
+
+        These are not analytically invertable, so instead do it iteratively.
+        Each round, use the previous parameters to calculate an updated
+        $\alpha$ and $\beta$, then use those to calculate new params.
+
+        Args:
+            a: Left boundary for the distribution.
+            b: Right boundary for the distribution.
+            mean: Actual mean for the distribution.
+            std: Actual standard deviation for the distribution.
+        
+        Returns:
+            Tuple of the estimated mu and sigma to crate the distribution.
+        """
         mu = mean
         sigma = std
-        for _ in range(10):
+        for _ in range(30):
             alpha = (a - mu) / sigma
             beta = (b - mu) / sigma
             z_w_pi = np.sqrt(2*np.pi) * (ndtr(beta) - ndtr(alpha))
+            if z_w_pi < 0.01:
+                logger.warning('Median outside window or std dev too high.')
 
             k = ((np.exp(-0.5*alpha**2)) - np.exp(-0.5*beta**2)) / z_w_pi
 
-            sigma = std / np.sqrt(
+            sigma_new = std / np.sqrt(
                 1 
                 - (beta * np.exp(-0.5*beta**2)
-                - alpha * np.exp(-0.5*alpha**2)) / z_w_pi
+                   - alpha * np.exp(-0.5*alpha**2)) / z_w_pi
                 - k**2
             )
 
-            mu = mean - k * sigma
+            mu_new = mean - k * sigma_new
+            if mu_new < a or mu_new > b:
+                logger.warning('Mean outide bounds.')
 
-        return truncnorm.cdf(x, a, b, mu, sigma)
+            if (np.abs((mu - mu_new)/mu) < 0.0001
+                and np.abs((sigma - sigma_new)/sigma) < 0.0001):
+                mu = mu_new
+                sigma = sigma_new
+                break
+
+            mu = mu_new
+            sigma = sigma_new
+        else:
+            logger.warning('Truncated normal reached param iteration limit.')           
+
+        return mu, sigma
 
 
 class ImagerFigure(Figure):
@@ -192,6 +274,7 @@ class ImagerFigure(Figure):
             energy: Observation array energies. Shape matches x and y
             x: Observation array x-coordinate.
             y: Observation array y-coordinate.
+            **kwargs: All other valid kwargs for a matplotlib Figure.
         """
         _ = energy, x, y, kwargs
         raise NotImplementedError('Base class not implemented.')
@@ -226,6 +309,14 @@ class SpectrumFigure(ImagerFigure):
     def __init__(self, *args,
                  spectrum_max: Optional[float] = None,
                  **kwargs):
+        """Initialize the energy spectrum figure.
+
+        Args:
+            *args: Passed to the base ImagerFigure class.
+            spectrum_max: Maximum on y-axis for the energy spectrum. If not
+                provided, matplotlib automatic limits are used.
+            **kwargs: Passed to the base ImagerFigure class.
+        """
         super().__init__(*args, **kwargs)
         gs = GridSpec(1, 1, figure=self)
         self.ax_spectrum = self.add_subplot(gs[0], axes_class=ImagerAxes)
@@ -266,6 +357,14 @@ class ImageHistFigure(ImagerFigure):
     def __init__(self, *args,
                  image_max: Optional[float] = None,
                  **kwargs):
+        """Initialize the energy spectrum figure.
+
+        Args:
+            *args: Passed to the base ImagerFigure class.
+            image_max: Maximum for the image colormap in units x-rays/bin.
+                If not provided, matplotlib selects the range automatically.
+            **kwargs: Passed to the base ImagerFigure class.
+        """
         super().__init__(*args, **kwargs)
         gs = GridSpec(1, 8, figure=self, wspace=1.0)
         self.ax_image = self.add_subplot(gs[:-1], axes_class=ImagerAxes)
@@ -286,8 +385,8 @@ class ImageHistFigure(ImagerFigure):
             y: Observation array y-coordinate.
             energy_range: Tuple with the lower and upper limit to be used for
                 the position histogram. Others are ignored.
-            dx:
-            dy: 
+            dx: Uncertainty for x. Should have the same shape.
+            dy: Uncertainty for y. Should have the same shape.
         """
         with plt.rc_context(self.rc_params):
             if energy_range is not None:
@@ -314,18 +413,14 @@ class ImageSpectrumFigure(SpectrumFigure, ImageHistFigure):
         ax_colorbar: The colorbar Axes.
     """
 
-    def __init__(self, *args,
-                 spectrum_max: Optional[float] = None,
-                 image_max: Optional[float] = None,
-                 **kwargs):
-        ImagerFigure.__init__(self, *args, **kwargs)
-        gs = GridSpec(8, 8, figure=self,
-                      hspace=1.0, wspace=1.0)
-        self.ax_spectrum = self.add_subplot(gs[:2, :], axes_class=ImagerAxes)
-        self.spectrum_max = spectrum_max
-        self.ax_image = self.add_subplot(gs[2:, :-1], axes_class=ImagerAxes)
-        self.image_max = image_max
-        self.ax_colorbar = self.add_subplot(gs[2:, -1], axes_class=ImagerAxes)
+    @override
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        gs = GridSpec(8, 8, figure=self, hspace=1.0, wspace=1.0)
+        self.ax_spectrum.set_subplotspec(gs[:2, :])
+        self.ax_image.set_subplotspec(gs[2:, :-1])
+        self.ax_colorbar.set_subplotspec(gs[2:, -1])
 
     @override
     def plot_observations(self, *args, **kwargs):
@@ -361,6 +456,7 @@ class ImagerAnimation(TimedAnimation):
 
         self._framedata = df.resample(time_delta, on='t')
         super().__init__(fig, **kwargs)
+
 
     def _draw_frame(self, framedata: tuple[pd.Timedelta, DataFrame]):
         """Draw the frame for each step.
